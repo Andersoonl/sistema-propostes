@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// Máquinas fixas: VP1, VP2, HZEN
+model Machine {
+  id             String          @id @default(cuid())
+  name           String          @unique
+  productionDays ProductionDay[]
+  shiftOverrides ShiftOverride[]
+  createdAt      DateTime        @default(now())
+}
+
+// Produtos que podem ser produzidos
+model Product {
+  id              String           @id @default(cuid())
+  name            String           @unique
+  productionItems ProductionItem[]
+  createdAt       DateTime         @default(now())
+}
+
+// Override de turno por dia e máquina (casos raros)
+model ShiftOverride {
+  id              String   @id @default(cuid())
+  machineId       String
+  machine         Machine  @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  date            DateTime
+  startTime       String   // HH:mm
+  endTime         String   // HH:mm
+  breakMinutes    Int      // Pausas em minutos
+  createdAt       DateTime @default(now())
+
+  @@unique([machineId, date])
+}
+
+// Dia de produção (um registro por máquina por dia)
+model ProductionDay {
+  id              String           @id @default(cuid())
+  machineId       String
+  machine         Machine          @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  date            DateTime
+  hasProductSwap  Boolean          @default(false) // Troca de produto?
+  notes           String?
+  productionItems ProductionItem[]
+  downtimeEvents  DowntimeEvent[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@unique([machineId, date])
+}
+
+// Item de produção (produto + ciclos)
+// Máximo 2 por dia por máquina
+model ProductionItem {
+  id              String        @id @default(cuid())
+  productionDayId String
+  productionDay   ProductionDay @relation(fields: [productionDayId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  cycles          Int           // Quantidade de ciclos
+  startTime       String?       // HH:mm (opcional)
+  endTime         String?       // HH:mm (opcional)
+  createdAt       DateTime      @default(now())
+
+  @@unique([productionDayId, productId])
+}
+
+// Motivos de parada (hierarquia NV1 -> NV2 -> NV3)
+model DowntimeReason {
+  id             String           @id @default(cuid())
+  name           String
+  level          Int              // 1, 2, or 3
+  parentId       String?
+  parent         DowntimeReason?  @relation("ReasonHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children       DowntimeReason[] @relation("ReasonHierarchy")
+  downtimeEvents DowntimeEvent[]
+  createdAt      DateTime         @default(now())
+
+  @@unique([name, level, parentId])
+}
+
+// Evento de parada
+model DowntimeEvent {
+  id              String         @id @default(cuid())
+  productionDayId String
+  productionDay   ProductionDay  @relation(fields: [productionDayId], references: [id], onDelete: Cascade)
+  reasonId        String         // Motivo NV3 obrigatório
+  reason          DowntimeReason @relation(fields: [reasonId], references: [id], onDelete: Cascade)
+  durationMinutes Int            // Duração em minutos
+  notes           String?        // Observação opcional
+  createdAt       DateTime       @default(now())
+}
