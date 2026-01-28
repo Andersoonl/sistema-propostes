@@ -1,12 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import type { Machine, Product, ProductionDay, ProductionItem, DowntimeEvent, DowntimeReason } from '@/app/generated/prisma/client'
+import { useState, useEffect, useCallback, startTransition } from 'react'
+import type { Machine, Product, ProductionDay, ProductionItem, DowntimeEvent, DowntimeReason, ShiftOverride } from '@/app/generated/prisma/client'
 import { getProductionDay } from '@/app/actions/production'
+import { getMachineShiftForDay, type ShiftData } from '@/app/actions/shifts'
+import { getShiftOverride, saveShiftOverride, deleteShiftOverride } from '@/app/actions/shift'
 import { DatePicker } from '@/app/components/DatePicker'
 import { ProductionForm } from '@/app/components/ProductionForm'
 import { DowntimeForm } from '@/app/components/DowntimeForm'
-import { getShiftConfig, getShiftMinutes, formatMinutes, getDayOfWeekName } from '@/lib/shift'
+import { formatMinutes, getDayOfWeekName } from '@/lib/shift'
 
 interface DiaClientProps {
   machines: Machine[]
@@ -23,31 +25,110 @@ type ProductionDayWithRelations = ProductionDay & {
   })[]
 }
 
+interface EffectiveShift extends ShiftData {
+  isOverride: boolean
+}
+
+function calculateShiftMinutes(shift: ShiftData): number {
+  if (shift.startTime === shift.endTime) return 0
+  const [startHour, startMin] = shift.startTime.split(':').map(Number)
+  const [endHour, endMin] = shift.endTime.split(':').map(Number)
+  const totalMinutes = (endHour * 60 + endMin) - (startHour * 60 + startMin)
+  return Math.max(0, totalMinutes - shift.breakMinutes)
+}
+
 export function DiaClient({ machines, products }: DiaClientProps) {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [productionData, setProductionData] = useState<Record<string, ProductionDayWithRelations | null>>({})
-  const [loading, setLoading] = useState(false)
+  const [machineShifts, setMachineShifts] = useState<Record<string, EffectiveShift>>({})
+  const [shiftOverrides, setShiftOverrides] = useState<Record<string, ShiftOverride | null>>({})
+  const [loading, setLoading] = useState(true)
+  const [editingShift, setEditingShift] = useState<string | null>(null)
+  const [shiftForm, setShiftForm] = useState({ startTime: '', endTime: '', breakMinutes: 0 })
+  const [savingShift, setSavingShift] = useState(false)
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true)
     const data: Record<string, ProductionDayWithRelations | null> = {}
+    const shifts: Record<string, EffectiveShift> = {}
+    const overrides: Record<string, ShiftOverride | null> = {}
 
     for (const machine of machines) {
-      const pd = await getProductionDay(machine.id, selectedDate)
+      const [pd, baseShift, override] = await Promise.all([
+        getProductionDay(machine.id, selectedDate),
+        getMachineShiftForDay(machine.id, selectedDate.getDay()),
+        getShiftOverride(machine.id, selectedDate),
+      ])
       data[machine.id] = pd as ProductionDayWithRelations | null
+      overrides[machine.id] = override
+
+      // Usar override se existir, senão usar turno base
+      if (override) {
+        shifts[machine.id] = {
+          dayOfWeek: selectedDate.getDay(),
+          startTime: override.startTime,
+          endTime: override.endTime,
+          breakMinutes: override.breakMinutes,
+          isOverride: true,
+        }
+      } else {
+        shifts[machine.id] = {
+          ...baseShift,
+          isOverride: false,
+        }
+      }
     }
 
-    setProductionData(data)
-    setLoading(false)
-  }
+    startTransition(() => {
+      setProductionData(data)
+      setMachineShifts(shifts)
+      setShiftOverrides(overrides)
+      setLoading(false)
+    })
+  }, [machines, selectedDate])
 
   useEffect(() => {
     loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate])
 
   const dayOfWeek = selectedDate.getDay()
-  const shiftConfig = getShiftConfig(selectedDate)
-  const shiftMinutes = getShiftMinutes(selectedDate)
+  // Verificar se alguma máquina tem turno disponível
+  const anyMachineHasShift = Object.values(machineShifts).some(
+    (shift) => calculateShiftMinutes(shift) > 0
+  )
+
+  const handleEditShift = (machineId: string) => {
+    const shift = machineShifts[machineId]
+    setShiftForm({
+      startTime: shift?.startTime || '07:00',
+      endTime: shift?.endTime || '17:00',
+      breakMinutes: shift?.breakMinutes || 75,
+    })
+    setEditingShift(machineId)
+  }
+
+  const handleSaveShift = async (machineId: string) => {
+    setSavingShift(true)
+    await saveShiftOverride({
+      machineId,
+      date: selectedDate,
+      startTime: shiftForm.startTime,
+      endTime: shiftForm.endTime,
+      breakMinutes: shiftForm.breakMinutes,
+    })
+    setEditingShift(null)
+    await loadData()
+    setSavingShift(false)
+  }
+
+  const handleRemoveOverride = async (machineId: string) => {
+    setSavingShift(true)
+    await deleteShiftOverride(machineId, selectedDate)
+    setEditingShift(null)
+    await loadData()
+    setSavingShift(false)
+  }
 
   const formatDateDisplay = (date: Date) => {
     return date.toLocaleDateString('pt-BR', {
@@ -74,20 +155,6 @@ export function DiaClient({ machines, products }: DiaClientProps) {
               <div className="text-lg font-medium text-gray-900 capitalize">
                 {formatDateDisplay(selectedDate)}
               </div>
-              <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
-                <span className="flex items-center gap-1">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Turno: {shiftConfig.startTime} - {shiftConfig.endTime}
-                </span>
-                <span className="flex items-center gap-1">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Disponível: <span className="font-medium text-[#2d3e7e]">{formatMinutes(shiftMinutes)}</span>
-                </span>
-              </div>
             </div>
           </div>
         </div>
@@ -103,7 +170,7 @@ export function DiaClient({ machines, products }: DiaClientProps) {
             Carregando...
           </div>
         </div>
-      ) : shiftMinutes === 0 ? (
+      ) : !anyMachineHasShift ? (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
           <div className="text-gray-400 mb-2">
             <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -111,14 +178,34 @@ export function DiaClient({ machines, products }: DiaClientProps) {
             </svg>
           </div>
           <div className="text-lg font-medium text-gray-600">{getDayOfWeekName(dayOfWeek)}</div>
-          <div className="text-gray-500">Sem turno programado</div>
+          <div className="text-gray-500">Sem turno programado para nenhuma máquina</div>
         </div>
       ) : (
         <div className="grid md:grid-cols-3 gap-6">
           {machines.map((machine) => {
             const pd = productionData[machine.id]
+            const shift = machineShifts[machine.id]
+            const shiftMinutes = shift ? calculateShiftMinutes(shift) : 0
             const totalCycles = pd?.productionItems.reduce((sum, item) => sum + item.cycles, 0) || 0
             const totalDowntime = pd?.downtimeEvents.reduce((sum, e) => sum + e.durationMinutes, 0) || 0
+
+            const isEditing = editingShift === machine.id
+
+            // Se a máquina não tem turno neste dia, mostrar mensagem com opção de adicionar
+            if (shiftMinutes === 0 && !isEditing) {
+              return (
+                <div key={machine.id} className="bg-gray-50 rounded-lg border border-gray-200 p-6 text-center">
+                  <div className="text-lg font-bold text-gray-400">{machine.name}</div>
+                  <div className="text-sm text-gray-400 mt-2">Sem turno programado</div>
+                  <button
+                    onClick={() => handleEditShift(machine.id)}
+                    className="mt-3 text-sm text-blue-600 hover:text-blue-800 underline"
+                  >
+                    Adicionar turno para este dia
+                  </button>
+                </div>
+              )
+            }
 
             return (
               <div key={machine.id} className="space-y-4">
@@ -130,29 +217,122 @@ export function DiaClient({ machines, products }: DiaClientProps) {
                     ? 'bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200'
                     : 'bg-gradient-to-r from-orange-50 to-orange-100 border-orange-200'
                 }`}>
-                  <div className={`text-lg font-bold ${
-                    machine.name === 'VP1'
-                      ? 'text-green-800'
-                      : machine.name === 'VP2'
-                      ? 'text-blue-800'
-                      : 'text-orange-800'
-                  }`}>{machine.name}</div>
-                  <div className="grid grid-cols-2 gap-4 mt-3">
-                    <div className="bg-white rounded-md p-2 text-center">
-                      <div className={`text-2xl font-bold ${
-                        machine.name === 'VP1'
-                          ? 'text-green-600'
-                          : machine.name === 'VP2'
-                          ? 'text-blue-600'
-                          : 'text-orange-600'
-                      }`}>{totalCycles}</div>
-                      <div className="text-xs text-gray-500 uppercase tracking-wide">Ciclos</div>
-                    </div>
-                    <div className="bg-white rounded-md p-2 text-center">
-                      <div className="text-2xl font-bold text-gray-600">{totalDowntime}</div>
-                      <div className="text-xs text-gray-500 uppercase tracking-wide">Min Paradas</div>
-                    </div>
+                  <div className="flex justify-between items-start">
+                    <div className={`text-lg font-bold ${
+                      machine.name === 'VP1'
+                        ? 'text-green-800'
+                        : machine.name === 'VP2'
+                        ? 'text-blue-800'
+                        : 'text-orange-800'
+                    }`}>{machine.name}</div>
+                    {shift && !isEditing && (
+                      <button
+                        onClick={() => handleEditShift(machine.id)}
+                        className="text-xs text-right group cursor-pointer hover:bg-white/50 rounded p-1 -m-1 transition-colors"
+                        title="Clique para ajustar turno deste dia"
+                      >
+                        <div className="flex items-center gap-1 justify-end text-gray-600 group-hover:text-blue-600">
+                          {shift.startTime} - {shift.endTime}
+                          {shift.isOverride && (
+                            <span className="text-orange-500" title="Turno ajustado para este dia">*</span>
+                          )}
+                          <svg className="w-3.5 h-3.5 opacity-50 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </div>
+                        <div className="font-medium text-gray-600 group-hover:text-blue-600">{formatMinutes(shiftMinutes)} úteis</div>
+                      </button>
+                    )}
                   </div>
+
+                  {/* Formulário de edição de turno */}
+                  {isEditing && (
+                    <div className="mt-3 bg-white rounded-lg p-3 border border-gray-200">
+                      <div className="text-xs font-medium text-gray-700 mb-2">
+                        Ajustar turno para {formatDateDisplay(selectedDate).split(',')[0]}
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Início</label>
+                          <input
+                            type="time"
+                            value={shiftForm.startTime}
+                            onChange={(e) => setShiftForm({ ...shiftForm, startTime: e.target.value })}
+                            className="w-full border rounded px-2 py-1 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Fim</label>
+                          <input
+                            type="time"
+                            value={shiftForm.endTime}
+                            onChange={(e) => setShiftForm({ ...shiftForm, endTime: e.target.value })}
+                            className="w-full border rounded px-2 py-1 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Pausas</label>
+                          <input
+                            type="number"
+                            value={shiftForm.breakMinutes}
+                            onChange={(e) => setShiftForm({ ...shiftForm, breakMinutes: parseInt(e.target.value) || 0 })}
+                            min={0}
+                            className="w-full border rounded px-2 py-1 text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-2">
+                        Minutos úteis: <span className="font-medium">
+                          {formatMinutes(calculateShiftMinutes(shiftForm))}
+                        </span>
+                      </div>
+                      <div className="flex gap-2 mt-3">
+                        <button
+                          onClick={() => handleSaveShift(machine.id)}
+                          disabled={savingShift}
+                          className="flex-1 bg-blue-600 text-white text-xs py-1.5 rounded hover:bg-blue-700 disabled:opacity-50"
+                        >
+                          {savingShift ? 'Salvando...' : 'Salvar'}
+                        </button>
+                        <button
+                          onClick={() => setEditingShift(null)}
+                          disabled={savingShift}
+                          className="px-3 bg-gray-200 text-gray-700 text-xs py-1.5 rounded hover:bg-gray-300 disabled:opacity-50"
+                        >
+                          Cancelar
+                        </button>
+                        {shift?.isOverride && (
+                          <button
+                            onClick={() => handleRemoveOverride(machine.id)}
+                            disabled={savingShift}
+                            className="px-3 bg-red-100 text-red-700 text-xs py-1.5 rounded hover:bg-red-200 disabled:opacity-50"
+                            title="Remover ajuste e usar turno padrão"
+                          >
+                            Resetar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {!isEditing && (
+                    <div className="grid grid-cols-2 gap-4 mt-3">
+                      <div className="bg-white rounded-md p-2 text-center">
+                        <div className={`text-2xl font-bold ${
+                          machine.name === 'VP1'
+                            ? 'text-green-600'
+                            : machine.name === 'VP2'
+                            ? 'text-blue-600'
+                            : 'text-orange-600'
+                        }`}>{totalCycles}</div>
+                        <div className="text-xs text-gray-500 uppercase tracking-wide">Ciclos</div>
+                      </div>
+                      <div className="bg-white rounded-md p-2 text-center">
+                        <div className="text-2xl font-bold text-gray-600">{totalDowntime}</div>
+                        <div className="text-xs text-gray-500 uppercase tracking-wide">Min Paradas</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Formulário de Produção */}
@@ -168,6 +348,7 @@ export function DiaClient({ machines, products }: DiaClientProps) {
                 {pd && (
                   <DowntimeForm
                     productionDayId={pd.id}
+                    machineId={machine.id}
                     existingEvents={pd.downtimeEvents}
                     onSaved={loadData}
                   />

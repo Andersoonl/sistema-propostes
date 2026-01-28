@@ -9,11 +9,28 @@ datasource db {
 
 // Máquinas fixas: VP1, VP2, HZEN
 model Machine {
-  id             String          @id @default(cuid())
-  name           String          @unique
-  productionDays ProductionDay[]
-  shiftOverrides ShiftOverride[]
-  createdAt      DateTime        @default(now())
+  id              String           @id @default(cuid())
+  name            String           @unique
+  productionDays  ProductionDay[]
+  shiftOverrides  ShiftOverride[]
+  downtimeReasons DowntimeReason[]
+  shifts          MachineShift[]
+  createdAt       DateTime         @default(now())
+}
+
+// Configuração de turno por máquina e dia da semana
+model MachineShift {
+  id           String   @id @default(cuid())
+  machineId    String
+  machine      Machine  @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  dayOfWeek    Int      // 0=Domingo, 1=Segunda, ..., 6=Sábado
+  startTime    String   // HH:mm
+  endTime      String   // HH:mm
+  breakMinutes Int      // Pausas em minutos
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([machineId, dayOfWeek])
 }
 
 // Produtos que podem ser produzidos
@@ -78,10 +95,12 @@ model DowntimeReason {
   parentId       String?
   parent         DowntimeReason?  @relation("ReasonHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
   children       DowntimeReason[] @relation("ReasonHierarchy")
+  machineId      String?
+  machine        Machine?         @relation(fields: [machineId], references: [id], onDelete: Cascade)
   downtimeEvents DowntimeEvent[]
   createdAt      DateTime         @default(now())
 
-  @@unique([name, level, parentId])
+  @@unique([name, level, parentId, machineId])
 }
 
 // Evento de parada
@@ -89,7 +108,7 @@ model DowntimeEvent {
   id              String         @id @default(cuid())
   productionDayId String
   productionDay   ProductionDay  @relation(fields: [productionDayId], references: [id], onDelete: Cascade)
-  reasonId        String         // Motivo NV3 obrigatório
+  reasonId        String         // Motivo (NV1, NV2 ou NV3)
   reason          DowntimeReason @relation(fields: [reasonId], references: [id], onDelete: Cascade)
   durationMinutes Int            // Duração em minutos
   notes           String?        // Observação opcional

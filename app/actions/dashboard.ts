@@ -1,7 +1,7 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
-import { getShiftMinutes, DEFAULT_SHIFTS } from '@/lib/shift'
+import { DEFAULT_SHIFTS } from '@/lib/shift'
 
 interface MonthlyProductionData {
   date: string
@@ -96,21 +96,33 @@ export async function getMonthlyDowntimeData(year: number, month: number) {
     },
   })
 
-  // Agrupar por NV1/NV2/NV3
+  // Agrupar por NV1/NV2/NV3 (motivo pode ter sido registrado em qualquer nível)
   const groupedData: Record<string, MonthlyDowntimeData> = {}
 
   for (const event of downtimeEvents) {
-    const nv3 = event.reason
-    const nv2 = nv3.parent
-    const nv1 = nv2?.parent
+    const reason = event.reason
+    let nv1Name = '-'
+    let nv2Name = '-'
+    let nv3Name = '-'
 
-    const key = `${nv1?.name || 'N/A'}|${nv2?.name || 'N/A'}|${nv3.name}`
+    if (reason.level === 1) {
+      nv1Name = reason.name
+    } else if (reason.level === 2) {
+      nv1Name = reason.parent?.name || '-'
+      nv2Name = reason.name
+    } else if (reason.level === 3) {
+      nv1Name = reason.parent?.parent?.name || '-'
+      nv2Name = reason.parent?.name || '-'
+      nv3Name = reason.name
+    }
+
+    const key = `${nv1Name}|${nv2Name}|${nv3Name}`
 
     if (!groupedData[key]) {
       groupedData[key] = {
-        reasonNV1: nv1?.name || 'N/A',
-        reasonNV2: nv2?.name || 'N/A',
-        reasonNV3: nv3.name,
+        reasonNV1: nv1Name,
+        reasonNV2: nv2Name,
+        reasonNV3: nv3Name,
         totalMinutes: 0,
         count: 0,
       }
@@ -158,18 +170,26 @@ export async function getDowntimePareto(
     },
   })
 
-  // Agrupar pelo nível especificado
+  // Agrupar pelo nível especificado (motivo pode ter sido registrado em qualquer nível)
   const groupedByReason: Record<string, number> = {}
 
   for (const event of downtimeEvents) {
+    const reason = event.reason
     let reasonName: string
 
-    if (level === 3) {
-      reasonName = event.reason.name
+    if (level === 1) {
+      // Buscar NV1: subir até a raiz
+      if (reason.level === 1) reasonName = reason.name
+      else if (reason.level === 2) reasonName = reason.parent?.name || reason.name
+      else reasonName = reason.parent?.parent?.name || reason.parent?.name || reason.name
     } else if (level === 2) {
-      reasonName = event.reason.parent?.name || 'N/A'
+      // Buscar NV2: se o motivo não tem NV2, usa o próprio nome
+      if (reason.level === 1) reasonName = reason.name
+      else if (reason.level === 2) reasonName = reason.name
+      else reasonName = reason.parent?.name || reason.name
     } else {
-      reasonName = event.reason.parent?.parent?.name || 'N/A'
+      // Buscar NV3: se o motivo não tem NV3, usa o próprio nome
+      reasonName = reason.level === 3 ? reason.name : reason.name
     }
 
     groupedByReason[reasonName] = (groupedByReason[reasonName] || 0) + event.durationMinutes
@@ -207,11 +227,23 @@ interface DailySummary {
   availableMinutes: number
 }
 
+function calculateShiftMinutes(startTime: string, endTime: string, breakMinutes: number): number {
+  if (startTime === endTime) return 0
+  const [startHour, startMin] = startTime.split(':').map(Number)
+  const [endHour, endMin] = endTime.split(':').map(Number)
+  const totalMinutes = (endHour * 60 + endMin) - (startHour * 60 + startMin)
+  return Math.max(0, totalMinutes - breakMinutes)
+}
+
 export async function getMonthlySummary(year: number, month: number) {
   const startDate = new Date(year, month - 1, 1)
   const endDate = new Date(year, month, 0, 23, 59, 59)
 
-  const machines = await prisma.machine.findMany()
+  const machines = await prisma.machine.findMany({
+    include: {
+      shifts: true,
+    },
+  })
 
   const productionDays = await prisma.productionDay.findMany({
     where: {
@@ -242,6 +274,18 @@ export async function getMonthlySummary(year: number, month: number) {
     overrideMap.set(key, so)
   }
 
+  // Criar mapa de turnos por máquina e dia da semana
+  const machineShiftMap = new Map<string, { startTime: string; endTime: string; breakMinutes: number }>()
+  for (const machine of machines) {
+    for (const shift of machine.shifts) {
+      machineShiftMap.set(`${machine.id}|${shift.dayOfWeek}`, {
+        startTime: shift.startTime,
+        endTime: shift.endTime,
+        breakMinutes: shift.breakMinutes,
+      })
+    }
+  }
+
   const summaries: DailySummary[] = []
   const daysInMonth = new Date(year, month, 0).getDate()
 
@@ -253,7 +297,22 @@ export async function getMonthlySummary(year: number, month: number) {
     for (const machine of machines) {
       const key = `${machine.id}|${dateStr}`
       const override = overrideMap.get(key)
-      const shiftMinutes = getShiftMinutes(date, override)
+
+      let shiftMinutes: number
+      if (override) {
+        // Usar override se existir
+        shiftMinutes = calculateShiftMinutes(override.startTime, override.endTime, override.breakMinutes)
+      } else {
+        // Verificar turno customizado da máquina
+        const machineShift = machineShiftMap.get(`${machine.id}|${dayOfWeek}`)
+        if (machineShift) {
+          shiftMinutes = calculateShiftMinutes(machineShift.startTime, machineShift.endTime, machineShift.breakMinutes)
+        } else {
+          // Usar padrão global
+          const defaultShift = DEFAULT_SHIFTS[dayOfWeek]
+          shiftMinutes = calculateShiftMinutes(defaultShift.startTime, defaultShift.endTime, defaultShift.breakMinutes)
+        }
+      }
 
       const pd = productionDays.find(
         (p) => p.machineId === machine.id && p.date.toISOString().split('T')[0] === dateStr

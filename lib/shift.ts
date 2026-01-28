@@ -21,6 +21,8 @@ export const DEFAULT_SHIFTS: Record<number, ShiftConfig> = {
   6: { startTime: '07:00', endTime: '07:00', breakMinutes: 0 },     // Sábado (não trabalha)
 }
 
+export const DAY_NAMES = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado']
+
 export function getDefaultShiftMinutes(dayOfWeek: number): number {
   const shift = DEFAULT_SHIFTS[dayOfWeek]
   if (!shift || shift.startTime === shift.endTime) return 0
