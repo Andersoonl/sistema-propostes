@@ -9,6 +9,10 @@ interface MonthlyProductionData {
   VP2: number
   HZEN: number
   total: number
+  VP1Pieces: number
+  VP2Pieces: number
+  HZENPieces: number
+  totalPieces: number
 }
 
 export async function getMonthlyProductionData(year: number, month: number) {
@@ -43,6 +47,10 @@ export async function getMonthlyProductionData(year: number, month: number) {
       VP2: 0,
       HZEN: 0,
       total: 0,
+      VP1Pieces: 0,
+      VP2Pieces: 0,
+      HZENPieces: 0,
+      totalPieces: 0,
     }
   }
 
@@ -50,11 +58,14 @@ export async function getMonthlyProductionData(year: number, month: number) {
   for (const pd of productionDays) {
     const dateStr = pd.date.toISOString().split('T')[0]
     const totalCycles = pd.productionItems.reduce((sum, item) => sum + item.cycles, 0)
+    const totalPieces = pd.productionItems.reduce((sum, item) => sum + (item.pieces || 0), 0)
     const machineName = pd.machine.name as 'VP1' | 'VP2' | 'HZEN'
 
     if (dataByDate[dateStr] && machineName in dataByDate[dateStr]) {
       dataByDate[dateStr][machineName] = totalCycles
+      dataByDate[dateStr][`${machineName}Pieces` as 'VP1Pieces' | 'VP2Pieces' | 'HZENPieces'] = totalPieces
       dataByDate[dateStr].total += totalCycles
+      dataByDate[dateStr].totalPieces += totalPieces
     }
   }
 
@@ -223,8 +234,10 @@ interface DailySummary {
   machineName: string
   shiftMinutes: number
   productionCycles: number
+  productionPieces: number
   downtimeMinutes: number
   availableMinutes: number
+  hasProduction: boolean // indica se houve lançamento neste dia/máquina
 }
 
 function calculateShiftMinutes(startTime: string, endTime: string, breakMinutes: number): number {
@@ -233,6 +246,89 @@ function calculateShiftMinutes(startTime: string, endTime: string, breakMinutes:
   const [endHour, endMin] = endTime.split(':').map(Number)
   const totalMinutes = (endHour * 60 + endMin) - (startHour * 60 + startMin)
   return Math.max(0, totalMinutes - breakMinutes)
+}
+
+interface ProductPiecesSummary {
+  productId: string
+  productName: string
+  totalCycles: number
+  totalPieces: number
+  machineBreakdown: {
+    machineName: string
+    cycles: number
+    pieces: number
+  }[]
+}
+
+export async function getMonthlyProductPiecesSummary(year: number, month: number): Promise<ProductPiecesSummary[]> {
+  const startDate = new Date(year, month - 1, 1)
+  const endDate = new Date(year, month, 0, 23, 59, 59)
+
+  const productionItems = await prisma.productionItem.findMany({
+    where: {
+      productionDay: {
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+    },
+    include: {
+      product: true,
+      productionDay: {
+        include: {
+          machine: true,
+        },
+      },
+    },
+  })
+
+  // Agrupar por produto
+  const productMap = new Map<string, {
+    productId: string
+    productName: string
+    totalCycles: number
+    totalPieces: number
+    machineData: Map<string, { machineName: string; cycles: number; pieces: number }>
+  }>()
+
+  for (const item of productionItems) {
+    const productId = item.productId
+    const productName = item.product.name
+    const machineName = item.productionDay.machine.name
+
+    if (!productMap.has(productId)) {
+      productMap.set(productId, {
+        productId,
+        productName,
+        totalCycles: 0,
+        totalPieces: 0,
+        machineData: new Map(),
+      })
+    }
+
+    const productData = productMap.get(productId)!
+    productData.totalCycles += item.cycles
+    productData.totalPieces += item.pieces || 0
+
+    if (!productData.machineData.has(machineName)) {
+      productData.machineData.set(machineName, { machineName, cycles: 0, pieces: 0 })
+    }
+    const machineEntry = productData.machineData.get(machineName)!
+    machineEntry.cycles += item.cycles
+    machineEntry.pieces += item.pieces || 0
+  }
+
+  // Converter para array e ordenar por peças (decrescente)
+  return Array.from(productMap.values())
+    .map((p) => ({
+      productId: p.productId,
+      productName: p.productName,
+      totalCycles: p.totalCycles,
+      totalPieces: p.totalPieces,
+      machineBreakdown: Array.from(p.machineData.values()).sort((a, b) => b.pieces - a.pieces),
+    }))
+    .sort((a, b) => b.totalPieces - a.totalPieces)
 }
 
 export async function getMonthlySummary(year: number, month: number) {
@@ -319,6 +415,7 @@ export async function getMonthlySummary(year: number, month: number) {
       )
 
       const productionCycles = pd?.productionItems.reduce((sum, item) => sum + item.cycles, 0) || 0
+      const productionPieces = pd?.productionItems.reduce((sum, item) => sum + (item.pieces || 0), 0) || 0
       const downtimeMinutes = pd?.downtimeEvents.reduce((sum, e) => sum + e.durationMinutes, 0) || 0
 
       summaries.push({
@@ -328,8 +425,10 @@ export async function getMonthlySummary(year: number, month: number) {
         machineName: machine.name,
         shiftMinutes,
         productionCycles,
+        productionPieces,
         downtimeMinutes,
         availableMinutes: Math.max(0, shiftMinutes - downtimeMinutes),
+        hasProduction: !!pd, // true se existe ProductionDay (lançamento) neste dia/máquina
       })
     }
   }

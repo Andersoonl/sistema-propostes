@@ -44,7 +44,7 @@ export function DiaClient({ machines, products }: DiaClientProps) {
   const [shiftOverrides, setShiftOverrides] = useState<Record<string, ShiftOverride | null>>({})
   const [loading, setLoading] = useState(true)
   const [editingShift, setEditingShift] = useState<string | null>(null)
-  const [shiftForm, setShiftForm] = useState({ startTime: '', endTime: '', breakMinutes: 0 })
+  const [shiftForm, setShiftForm] = useState({ dayOfWeek: 0, startTime: '', endTime: '', breakMinutes: 0 })
   const [savingShift, setSavingShift] = useState(false)
 
   const loadData = useCallback(async () => {
@@ -101,6 +101,7 @@ export function DiaClient({ machines, products }: DiaClientProps) {
   const handleEditShift = (machineId: string) => {
     const shift = machineShifts[machineId]
     setShiftForm({
+      dayOfWeek: selectedDate.getDay(),
       startTime: shift?.startTime || '07:00',
       endTime: shift?.endTime || '17:00',
       breakMinutes: shift?.breakMinutes || 75,
@@ -170,17 +171,14 @@ export function DiaClient({ machines, products }: DiaClientProps) {
             Carregando...
           </div>
         </div>
-      ) : !anyMachineHasShift ? (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-          <div className="text-gray-400 mb-2">
-            <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-            </svg>
-          </div>
-          <div className="text-lg font-medium text-gray-600">{getDayOfWeekName(dayOfWeek)}</div>
-          <div className="text-gray-500">Sem turno programado para nenhuma máquina</div>
-        </div>
       ) : (
+        <>
+        {!anyMachineHasShift && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 text-center">
+            <div className="text-amber-700 font-medium">{getDayOfWeekName(dayOfWeek)} - Sem turno programado</div>
+            <div className="text-amber-600 text-sm">Clique em &quot;Adicionar turno&quot; em uma máquina para registrar produção</div>
+          </div>
+        )}
         <div className="grid md:grid-cols-3 gap-6">
           {machines.map((machine) => {
             const pd = productionData[machine.id]
@@ -357,6 +355,7 @@ export function DiaClient({ machines, products }: DiaClientProps) {
             )
           })}
         </div>
+        </>
       )}
     </div>
   )

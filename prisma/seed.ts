@@ -7,19 +7,238 @@ const adapter = new PrismaLibSql({
 
 const prisma = new PrismaClient({ adapter })
 
-async function upsertReason(name: string, level: number, parentId: string | null) {
+async function upsertReason(name: string, level: number, parentId: string | null, machineId: string) {
   const existing = await prisma.downtimeReason.findFirst({
-    where: { name, level, parentId },
+    where: { name, level, parentId, machineId },
   })
   if (existing) return existing
   return prisma.downtimeReason.create({
-    data: { name, level, parentId },
+    data: { name, level, parentId, machineId },
   })
 }
 
+// Estrutura de motivos para VP1 e VP2
+interface NV1Def {
+  name: string
+  children: NV2Def[]
+}
+
+interface NV2Def {
+  name: string
+  children?: string[] // NV3 names
+}
+
+function getVPReasons(): NV1Def[] {
+  return [
+    {
+      name: 'PINCA',
+      children: [
+        { name: 'Cabo' },
+        { name: 'Redutor' },
+        { name: 'Eletrico' },
+        { name: 'Correias' },
+      ],
+    },
+    {
+      name: 'VIBROPRENSA',
+      children: [
+        { name: 'Agitador' },
+        { name: 'Mesa' },
+        { name: 'Cilindros' },
+        { name: 'Sensores' },
+        { name: 'Coxins' },
+        { name: 'Rolamentos' },
+        { name: 'Motores' },
+        { name: 'Esteiras' },
+        { name: 'Mangueiras' },
+        { name: 'Valvulas/Blocos' },
+        { name: 'Chaves/Contactores' },
+        { name: 'Castelo' },
+        { name: 'Forma' },
+        { name: 'Unidade Hidraulica' },
+        {
+          name: 'Pecas desgaste',
+          children: ['Parafusos', 'Chapas', 'Tecnil', 'Correias', 'Escova'],
+        },
+      ],
+    },
+    {
+      name: 'MISTURADOR',
+      children: [
+        { name: 'Cilindro' },
+        { name: 'Esteiras' },
+        { name: 'Fuso Cimento' },
+        { name: 'Celula de carga' },
+        { name: 'Eletrico' },
+        { name: 'Porta' },
+        { name: 'Palhetas / Eixo' },
+        {
+          name: 'Pecas desgaste',
+          children: ['Parafusos', 'Correias', 'Rolamentos'],
+        },
+      ],
+    },
+    {
+      name: 'CENTRAL AGREGADOS (VP)',
+      children: [
+        { name: 'Motores' },
+        { name: 'Correia' },
+        { name: 'Compressor' },
+        { name: 'Esteiras' },
+        { name: 'Agregados' },
+        {
+          name: 'Pecas desgaste',
+          children: ['Parafusos', 'Chapas'],
+        },
+      ],
+    },
+    {
+      name: 'PALETIZACAO',
+      children: [
+        { name: 'Estantes' },
+        { name: 'Pallets' },
+        { name: 'M.O.' },
+        { name: 'Tabuas' },
+      ],
+    },
+    {
+      name: 'EMPILHADEIRAS/PA',
+      children: [
+        { name: 'Troca oleo' },
+        { name: 'Pneus' },
+        { name: 'Cilindros' },
+        { name: 'Freios' },
+        { name: 'Motores' },
+        { name: 'Mangueiras' },
+      ],
+    },
+    {
+      name: 'EXTRAS',
+      children: [
+        { name: 'Regulagem Maquina' },
+        { name: 'Troca de forma' },
+        { name: 'Dependencia da outra maquina' },
+        { name: 'Pa Mecanica' },
+        { name: 'Turma em outra maquina' },
+        { name: 'M.O.' },
+        { name: 'Chuva' },
+        { name: 'Energia' },
+        { name: 'Estoque Lotado' },
+      ],
+    },
+  ]
+}
+
+function getHZENReasons(): NV1Def[] {
+  return [
+    {
+      name: 'ELEVADOR',
+      children: [
+        { name: 'Correntes' },
+        { name: 'Redutor' },
+        { name: 'Eletrico' },
+        { name: 'Motores' },
+        { name: 'Sensores' },
+      ],
+    },
+    {
+      name: 'VIBROPRENSA',
+      children: [
+        { name: 'Agitador' },
+        { name: 'Mesa' },
+        { name: 'Cilindros' },
+        { name: 'Sensores' },
+        { name: 'Coxins' },
+        { name: 'Rolamentos' },
+        { name: 'Motores' },
+        { name: 'Esteiras' },
+        { name: 'Mangueiras' },
+        { name: 'Valvulas/Blocos' },
+        { name: 'Chaves/Contactores' },
+        { name: 'Castelo' },
+        { name: 'Forma' },
+        { name: 'Unidade Hidraulica' },
+        { name: 'CLP' },
+        {
+          name: 'Pecas desgaste',
+          children: ['Parafusos', 'Chapas', 'Tecnil', 'Correias', 'Escova'],
+        },
+      ],
+    },
+    {
+      name: 'MISTURADOR',
+      children: [
+        { name: 'Cilindro' },
+        { name: 'Esteiras' },
+        { name: 'Fuso Cimento' },
+        { name: 'Celula de carga' },
+        { name: 'Bucha do acoplamento' },
+        { name: 'Palhetas / Eixo' },
+        {
+          name: 'Pecas desgaste',
+          children: ['Parafusos', 'Correias', 'Chapas'],
+        },
+      ],
+    },
+    {
+      name: 'CENTRAL AGREGADOS (HZ)',
+      children: [
+        { name: 'Motores' },
+        { name: 'Correia' },
+        { name: 'Compressor' },
+        { name: 'Esteiras' },
+        { name: 'Cilindros' },
+        { name: 'Celula de Cargas' },
+        { name: 'Agregados' },
+        {
+          name: 'Pecas desgaste',
+          children: ['Parafusos', 'Chapas'],
+        },
+      ],
+    },
+    {
+      name: 'PALETIZACAO',
+      children: [
+        { name: 'Estantes' },
+        { name: 'Pallets' },
+        { name: 'M.O.' },
+        { name: 'Tabuas' },
+      ],
+    },
+    {
+      name: 'EXTRAS',
+      children: [
+        { name: 'Regulagem Maquina' },
+        { name: 'Troca de forma' },
+        { name: 'Pa Mecanica' },
+        { name: 'Energia' },
+        { name: 'Chuva / Infraestrutura' },
+        { name: 'Suporte Tecnico HZEN' },
+        { name: 'Estoque Lotado' },
+      ],
+    },
+  ]
+}
+
+async function seedReasonsForMachine(machineId: string, reasons: NV1Def[]) {
+  for (const nv1 of reasons) {
+    const nv1Record = await upsertReason(nv1.name, 1, null, machineId)
+
+    for (const nv2 of nv1.children) {
+      const nv2Record = await upsertReason(nv2.name, 2, nv1Record.id, machineId)
+
+      if (nv2.children) {
+        for (const nv3Name of nv2.children) {
+          await upsertReason(nv3Name, 3, nv2Record.id, machineId)
+        }
+      }
+    }
+  }
+}
+
 async function main() {
-  // Criar máquinas
-  const machines = await Promise.all([
+  // Criar maquinas
+  const [vp1, vp2, hzen] = await Promise.all([
     prisma.machine.upsert({
       where: { name: 'VP1' },
       update: {},
@@ -37,50 +256,22 @@ async function main() {
     }),
   ])
 
-  console.log('Máquinas criadas:', machines.map(m => m.name).join(', '))
+  console.log('Maquinas criadas:', [vp1, vp2, hzen].map(m => m.name).join(', '))
 
-  // Criar hierarquia de motivos de parada
-  // NV1: Categorias principais
-  const nv1Mecanica = await upsertReason('Mecânica', 1, null)
-  const nv1Eletrica = await upsertReason('Elétrica', 1, null)
-  const nv1Operacional = await upsertReason('Operacional', 1, null)
-  const nv1Qualidade = await upsertReason('Qualidade', 1, null)
+  // Criar hierarquia de motivos por maquina
+  const vpReasons = getVPReasons()
+  const hzenReasons = getHZENReasons()
 
-  // NV2: Subcategorias
-  const nv2Hidraulica = await upsertReason('Hidráulica', 2, nv1Mecanica.id)
-  const nv2Pneumatica = await upsertReason('Pneumática', 2, nv1Mecanica.id)
-  const nv2Motor = await upsertReason('Motor', 2, nv1Eletrica.id)
-  const nv2Sensores = await upsertReason('Sensores', 2, nv1Eletrica.id)
-  const nv2Setup = await upsertReason('Setup', 2, nv1Operacional.id)
-  const nv2Manutencao = await upsertReason('Manutenção Preventiva', 2, nv1Operacional.id)
-  const nv2Inspecao = await upsertReason('Inspeção', 2, nv1Qualidade.id)
+  await seedReasonsForMachine(vp1.id, vpReasons)
+  console.log('Motivos VP1 criados')
 
-  // NV3: Motivos específicos (folha)
-  const nv3Motivos = [
-    { name: 'Vazamento de óleo', parentId: nv2Hidraulica.id },
-    { name: 'Cilindro travado', parentId: nv2Hidraulica.id },
-    { name: 'Mangueira rompida', parentId: nv2Hidraulica.id },
-    { name: 'Válvula com defeito', parentId: nv2Pneumatica.id },
-    { name: 'Compressor parado', parentId: nv2Pneumatica.id },
-    { name: 'Motor queimado', parentId: nv2Motor.id },
-    { name: 'Inversor com falha', parentId: nv2Motor.id },
-    { name: 'Sensor indutivo', parentId: nv2Sensores.id },
-    { name: 'Encoder com falha', parentId: nv2Sensores.id },
-    { name: 'Troca de molde', parentId: nv2Setup.id },
-    { name: 'Ajuste de parâmetros', parentId: nv2Setup.id },
-    { name: 'Lubrificação', parentId: nv2Manutencao.id },
-    { name: 'Limpeza programada', parentId: nv2Manutencao.id },
-    { name: 'Teste de qualidade', parentId: nv2Inspecao.id },
-    { name: 'Amostragem', parentId: nv2Inspecao.id },
-  ]
+  await seedReasonsForMachine(vp2.id, vpReasons)
+  console.log('Motivos VP2 criados')
 
-  for (const motivo of nv3Motivos) {
-    await upsertReason(motivo.name, 3, motivo.parentId)
-  }
+  await seedReasonsForMachine(hzen.id, hzenReasons)
+  console.log('Motivos HZEN criados')
 
-  console.log('Motivos de parada criados (hierarquia NV1/NV2/NV3)')
-
-  // Criar alguns produtos de exemplo
+  // Criar produtos de exemplo
   const products = [
     'Bloco 14x19x39',
     'Bloco 19x19x39',
@@ -99,6 +290,27 @@ async function main() {
   }
 
   console.log('Produtos criados:', products.join(', '))
+
+  // Criar ingredientes padrão
+  const ingredients = [
+    { name: 'Cimento', unit: 'kg', unitPrice: 0.545 },
+    { name: 'Areia Fina', unit: 'kg', unitPrice: 0.0338 },
+    { name: 'Pó de Pedra', unit: 'kg', unitPrice: 0.0425 },
+    { name: 'Brita 9,5"', unit: 'kg', unitPrice: 0.073 },
+    { name: 'Pigmento', unit: 'kg', unitPrice: 0 },
+    { name: 'Aditivo', unit: 'ml', unitPrice: 0.0052 },
+    { name: 'Água', unit: 'kg', unitPrice: 0 },
+  ]
+
+  for (const ingredient of ingredients) {
+    await prisma.ingredient.upsert({
+      where: { name: ingredient.name },
+      update: { unit: ingredient.unit, unitPrice: ingredient.unitPrice },
+      create: ingredient,
+    })
+  }
+
+  console.log('Ingredientes criados:', ingredients.map(i => i.name).join(', '))
 }
 
 main()

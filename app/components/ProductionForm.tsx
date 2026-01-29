@@ -65,7 +65,8 @@ export function ProductionForm({
     setSaving(true)
 
     try {
-      const validItems = items.filter((item) => item.productId && item.cycles > 0)
+      // Permite ciclos = 0 para registrar dias sem produção (ex: máquina parada por quebra)
+      const validItems = items.filter((item) => item.productId && item.cycles >= 0)
 
       await saveProductionDay({
         machineId: machine.id,
@@ -154,8 +155,8 @@ export function ProductionForm({
               <input
                 type="number"
                 min="0"
-                value={item.cycles || ''}
-                onChange={(e) => updateItem(index, 'cycles', parseInt(e.target.value) || 0)}
+                value={item.cycles}
+                onChange={(e) => updateItem(index, 'cycles', e.target.value === '' ? 0 : parseInt(e.target.value))}
                 placeholder="Digite a quantidade de ciclos"
               />
             </div>

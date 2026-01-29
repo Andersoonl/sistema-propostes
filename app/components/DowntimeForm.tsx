@@ -13,6 +13,7 @@ type ReasonWithChildren = DowntimeReason & {
 
 interface DowntimeFormProps {
   productionDayId: string
+  machineId: string
   existingEvents: (DowntimeEvent & {
     reason: DowntimeReason & {
       parent?: DowntimeReason & {
@@ -23,7 +24,7 @@ interface DowntimeFormProps {
   onSaved?: () => void
 }
 
-export function DowntimeForm({ productionDayId, existingEvents, onSaved }: DowntimeFormProps) {
+export function DowntimeForm({ productionDayId, machineId, existingEvents, onSaved }: DowntimeFormProps) {
   const [hierarchy, setHierarchy] = useState<ReasonWithChildren[]>([])
   const [selectedNV1, setSelectedNV1] = useState('')
   const [selectedNV2, setSelectedNV2] = useState('')
@@ -38,10 +39,10 @@ export function DowntimeForm({ productionDayId, existingEvents, onSaved }: Downt
 
   useEffect(() => {
     loadReasons()
-  }, [])
+  }, [machineId])
 
   const loadReasons = async () => {
-    const data = await getReasonHierarchy()
+    const data = await getReasonHierarchy(machineId)
     setHierarchy(data as ReasonWithChildren[])
   }
 
@@ -57,8 +58,8 @@ export function DowntimeForm({ productionDayId, existingEvents, onSaved }: Downt
     e.preventDefault()
     setError(null)
 
-    if (!selectedNV3) {
-      setError('Selecione o motivo (NV3)')
+    if (!selectedNV1) {
+      setError('Selecione ao menos o motivo NV1')
       return
     }
 
@@ -72,7 +73,7 @@ export function DowntimeForm({ productionDayId, existingEvents, onSaved }: Downt
     try {
       await saveDowntimeEvent({
         productionDayId,
-        reasonId: selectedNV3,
+        reasonId: selectedNV3 || selectedNV2 || selectedNV1,
         durationMinutes: parseInt(duration),
         notes: notes || undefined,
       })
@@ -118,6 +119,7 @@ export function DowntimeForm({ productionDayId, existingEvents, onSaved }: Downt
         name: newReasonName.trim(),
         level: newReasonLevel,
         parentId,
+        machineId,
       })
 
       setNewReasonName('')
@@ -155,7 +157,13 @@ export function DowntimeForm({ productionDayId, existingEvents, onSaved }: Downt
                 className="flex justify-between items-center bg-[#dc2626]/10 border border-[#dc2626]/20 p-3 rounded-md text-sm"
               >
                 <div>
-                  <span className="font-medium text-gray-900">{event.reason.name}</span>
+                  <span className="font-medium text-gray-900">
+                    {event.reason.parent?.parent?.name
+                      ? `${event.reason.parent.parent.name} > ${event.reason.parent.name} > ${event.reason.name}`
+                      : event.reason.parent?.name
+                        ? `${event.reason.parent.name} > ${event.reason.name}`
+                        : event.reason.name}
+                  </span>
                   <span className="text-[#2d3e7e] ml-2 font-medium">({event.durationMinutes} min)</span>
                   {event.notes && (
                     <span className="text-gray-500 ml-2">- {event.notes}</span>
@@ -177,7 +185,7 @@ export function DowntimeForm({ productionDayId, existingEvents, onSaved }: Downt
       <form onSubmit={handleAddEvent} className="space-y-3">
         <div className="grid grid-cols-3 gap-2">
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">NV1</label>
+            <label className="block text-xs font-medium text-gray-700 mb-1">NV1 *</label>
             <select
               value={selectedNV1}
               onChange={(e) => {
@@ -211,12 +219,11 @@ export function DowntimeForm({ productionDayId, existingEvents, onSaved }: Downt
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">NV3 *</label>
+            <label className="block text-xs font-medium text-gray-700 mb-1">NV3</label>
             <select
               value={selectedNV3}
               onChange={(e) => setSelectedNV3(e.target.value)}
               disabled={!selectedNV2}
-              required
             >
               <option value="">Selecione...</option>
               {nv3Options.map((r) => (

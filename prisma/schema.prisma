@@ -38,7 +38,55 @@ model Product {
   id              String           @id @default(cuid())
   name            String           @unique
   productionItems ProductionItem[]
+  costRecipe      CostRecipe?
   createdAt       DateTime         @default(now())
+}
+
+// Ingredientes/Materiais (dados mestre)
+model Ingredient {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  unit        String       // kg, ml, un
+  unitPrice   Float        // R$/unidade
+  recipeItems RecipeItem[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+// Receita de custo do produto
+model CostRecipe {
+  id               String       @id @default(cuid())
+  productId        String       @unique
+  product          Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // Parâmetros de produção
+  density          Float?       // Densidade média
+  piecesPerCycle   Int          // Peças por ciclo
+  cyclesPerBatch   Float        // Ciclos por traço
+  piecesPerM2      Float        // Peças por m²
+  avgPieceWeightKg Float        // Peso médio da peça (kg)
+
+  // Custos extras (R$)
+  palletCost       Float        @default(0)
+  strappingCost    Float        @default(0)
+  plasticCost      Float        @default(0)
+
+  items            RecipeItem[]
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+}
+
+// Itens da receita (ingrediente + quantidade)
+model RecipeItem {
+  id           String     @id @default(cuid())
+  recipeId     String
+  recipe       CostRecipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  ingredientId String
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  quantity     Float      // Quantidade por traço
+  createdAt    DateTime   @default(now())
+
+  @@unique([recipeId, ingredientId])
 }
 
 // Override de turno por dia e máquina (casos raros)
@@ -80,6 +128,7 @@ model ProductionItem {
   productId       String
   product         Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
   cycles          Int           // Quantidade de ciclos
+  pieces          Int?          // Peças produzidas (calculado: ciclos * piecesPerCycle da receita)
   startTime       String?       // HH:mm (opcional)
   endTime         String?       // HH:mm (opcional)
   createdAt       DateTime      @default(now())

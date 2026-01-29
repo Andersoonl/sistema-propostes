@@ -110,12 +110,24 @@ export async function saveProductionDay(input: SaveProductionDayInput) {
     where: { productionDayId: productionDay.id },
   })
 
+  // Buscar receitas dos produtos para calcular peças
+  const productIds = input.items.map((item) => item.productId)
+  const recipes = await prisma.costRecipe.findMany({
+    where: { productId: { in: productIds } },
+    select: { productId: true, piecesPerCycle: true },
+  })
+  const recipeMap = new Map(recipes.map((r) => [r.productId, r.piecesPerCycle]))
+
   for (const item of input.items) {
+    const piecesPerCycle = recipeMap.get(item.productId)
+    const pieces = piecesPerCycle ? item.cycles * piecesPerCycle : null
+
     await prisma.productionItem.create({
       data: {
         productionDayId: productionDay.id,
         productId: item.productId,
         cycles: item.cycles,
+        pieces,
         startTime: item.startTime,
         endTime: item.endTime,
       },
@@ -146,13 +158,13 @@ export async function saveDowntimeEvent(input: SaveDowntimeEventInput) {
     throw new Error('Duração deve ser maior que zero')
   }
 
-  // Validação: motivo deve ser NV3 (folha)
+  // Validação: motivo deve existir (pode ser NV1, NV2 ou NV3)
   const reason = await prisma.downtimeReason.findUnique({
     where: { id: input.reasonId },
   })
 
-  if (!reason || reason.level !== 3) {
-    throw new Error('Motivo deve ser de nível 3 (específico)')
+  if (!reason) {
+    throw new Error('Motivo não encontrado')
   }
 
   const event = await prisma.downtimeEvent.create({
@@ -185,6 +197,16 @@ export async function createProduct(name: string) {
   })
 
   revalidatePath('/dia')
+  revalidatePath('/produtos')
 
   return product
+}
+
+export async function deleteProduct(id: string) {
+  await prisma.product.delete({
+    where: { id },
+  })
+
+  revalidatePath('/dia')
+  revalidatePath('/produtos')
 }

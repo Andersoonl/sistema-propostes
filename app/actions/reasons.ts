@@ -15,10 +15,31 @@ export async function getDowntimeReasons() {
   })
 }
 
-export async function getReasonHierarchy() {
-  // Buscar apenas NV1 (raízes) e incluir a hierarquia
+export async function getReasonHierarchy(machineId?: string) {
   const nv1Reasons = await prisma.downtimeReason.findMany({
-    where: { level: 1 },
+    where: {
+      level: 1,
+      ...(machineId ? { machineId } : {}),
+    },
+    orderBy: { name: 'asc' },
+    include: {
+      children: {
+        orderBy: { name: 'asc' },
+        include: {
+          children: {
+            orderBy: { name: 'asc' },
+          },
+        },
+      },
+    },
+  })
+
+  return nv1Reasons
+}
+
+export async function getReasonHierarchyForManagement(machineId: string) {
+  const nv1Reasons = await prisma.downtimeReason.findMany({
+    where: { level: 1, machineId },
     orderBy: { name: 'asc' },
     include: {
       children: {
@@ -51,6 +72,7 @@ interface CreateReasonInput {
   name: string
   level: number
   parentId?: string
+  machineId?: string
 }
 
 export async function createReason(input: CreateReasonInput) {
@@ -84,10 +106,33 @@ export async function createReason(input: CreateReasonInput) {
       name: input.name,
       level: input.level,
       parentId: input.parentId,
+      machineId: input.machineId,
     },
   })
 
   revalidatePath('/dia')
+  revalidatePath('/motivos')
 
   return reason
+}
+
+export async function updateReason(id: string, name: string) {
+  const reason = await prisma.downtimeReason.update({
+    where: { id },
+    data: { name },
+  })
+
+  revalidatePath('/dia')
+  revalidatePath('/motivos')
+
+  return reason
+}
+
+export async function deleteReason(id: string) {
+  await prisma.downtimeReason.delete({
+    where: { id },
+  })
+
+  revalidatePath('/dia')
+  revalidatePath('/motivos')
 }

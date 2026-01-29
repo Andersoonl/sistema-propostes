@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { MonthPicker } from '@/app/components/DatePicker'
-import { getMonthlyProductionData, getMonthlySummary } from '@/app/actions/dashboard'
+import { getMonthlyProductionData, getMonthlySummary, getMonthlyProductPiecesSummary } from '@/app/actions/dashboard'
 import {
   LineChart,
   Line,
@@ -22,6 +22,10 @@ interface MonthlyProductionData {
   VP2: number
   HZEN: number
   total: number
+  VP1Pieces: number
+  VP2Pieces: number
+  HZENPieces: number
+  totalPieces: number
 }
 
 interface DailySummary {
@@ -31,8 +35,22 @@ interface DailySummary {
   machineName: string
   shiftMinutes: number
   productionCycles: number
+  productionPieces: number
   downtimeMinutes: number
   availableMinutes: number
+  hasProduction: boolean
+}
+
+interface ProductPiecesSummary {
+  productId: string
+  productName: string
+  totalCycles: number
+  totalPieces: number
+  machineBreakdown: {
+    machineName: string
+    cycles: number
+    pieces: number
+  }[]
 }
 
 interface ProductionDashClientProps {
@@ -40,6 +58,7 @@ interface ProductionDashClientProps {
   initialMonth: number
   initialProductionData: MonthlyProductionData[]
   initialSummary: DailySummary[]
+  initialProductPieces: ProductPiecesSummary[]
 }
 
 export function ProductionDashClient({
@@ -47,11 +66,13 @@ export function ProductionDashClient({
   initialMonth,
   initialProductionData,
   initialSummary,
+  initialProductPieces,
 }: ProductionDashClientProps) {
   const [year, setYear] = useState(initialYear)
   const [month, setMonth] = useState(initialMonth)
   const [productionData, setProductionData] = useState(initialProductionData)
   const [summary, setSummary] = useState(initialSummary)
+  const [productPieces, setProductPieces] = useState(initialProductPieces)
   const [loading, setLoading] = useState(false)
 
   const handleMonthChange = async (newYear: number, newMonth: number) => {
@@ -59,13 +80,15 @@ export function ProductionDashClient({
     setMonth(newMonth)
     setLoading(true)
 
-    const [newProductionData, newSummary] = await Promise.all([
+    const [newProductionData, newSummary, newProductPieces] = await Promise.all([
       getMonthlyProductionData(newYear, newMonth),
       getMonthlySummary(newYear, newMonth),
+      getMonthlyProductPiecesSummary(newYear, newMonth),
     ])
 
     setProductionData(newProductionData)
     setSummary(newSummary)
+    setProductPieces(newProductPieces)
     setLoading(false)
   }
 
@@ -75,7 +98,8 @@ export function ProductionDashClient({
     const totalCycles = machineData.reduce((sum, s) => sum + s.productionCycles, 0)
     const totalDowntime = machineData.reduce((sum, s) => sum + s.downtimeMinutes, 0)
     const totalShift = machineData.reduce((sum, s) => sum + s.shiftMinutes, 0)
-    const workDays = machineData.filter((s) => s.shiftMinutes > 0).length
+    // Contar apenas dias com lançamento (hasProduction = true)
+    const workDays = machineData.filter((s) => s.hasProduction).length
 
     return {
       machine,
@@ -89,6 +113,7 @@ export function ProductionDashClient({
   })
 
   const totalCycles = machineStats.reduce((sum, s) => sum + s.totalCycles, 0)
+  const totalPieces = (productPieces || []).reduce((sum, p) => sum + p.totalPieces, 0)
 
   // Formatar dados para gráfico de barras diário
   const chartData = productionData
@@ -174,8 +199,8 @@ export function ProductionDashClient({
             </div>
           </div>
 
-          {/* Tabela de Resumo */}
-          <div className="bg-white rounded-lg shadow overflow-hidden">
+          {/* Tabela de Resumo por Máquina */}
+          <div className="bg-white rounded-lg shadow overflow-hidden mb-6">
             <h2 className="text-lg font-semibold p-4 border-b">Resumo por Máquina</h2>
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -198,7 +223,7 @@ export function ProductionDashClient({
                     <tr key={stat.machine}>
                       <td className={`px-6 py-4 whitespace-nowrap font-semibold ${machineColor}`}>{stat.machine}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">{stat.totalCycles.toLocaleString()}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{stat.avgCyclesPerDay}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right">{stat.avgCyclesPerDay} ciclos</td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-gray-600">{stat.totalDowntime}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
                         <span className={stat.availability >= 80 ? 'text-green-600' : stat.availability >= 60 ? 'text-yellow-600' : 'text-red-600'}>
@@ -210,6 +235,66 @@ export function ProductionDashClient({
                 })}
               </tbody>
             </table>
+          </div>
+
+          {/* Resumo de Peças por Produto */}
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <h2 className="text-lg font-semibold p-4 border-b">Resumo de Peças por Produto</h2>
+            {(!productPieces || productPieces.length === 0) ? (
+              <div className="p-4 text-center text-gray-500">Nenhum produto registrado neste mês</div>
+            ) : (
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Produto</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Ciclos</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Peças</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Por Máquina</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {productPieces.map((product) => (
+                    <tr key={product.productId}>
+                      <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{product.productName}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right">{product.totalCycles.toLocaleString()}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right font-semibold text-indigo-600">
+                        {product.totalPieces.toLocaleString()}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-wrap gap-2">
+                          {product.machineBreakdown.map((m) => {
+                            const machineColor = m.machineName === 'VP1'
+                              ? 'bg-green-100 text-green-700'
+                              : m.machineName === 'VP2'
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-orange-100 text-orange-700'
+                            return (
+                              <span
+                                key={m.machineName}
+                                className={`inline-flex items-center px-2 py-1 rounded text-xs ${machineColor}`}
+                              >
+                                {m.machineName}: {m.pieces.toLocaleString()} pçs
+                              </span>
+                            )
+                          })}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {/* Linha de total */}
+                  <tr className="bg-gray-50 font-semibold">
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-900">TOTAL</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      {productPieces.reduce((sum, p) => sum + p.totalCycles, 0).toLocaleString()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-indigo-600">
+                      {totalPieces.toLocaleString()}
+                    </td>
+                    <td className="px-6 py-4"></td>
+                  </tr>
+                </tbody>
+              </table>
+            )}
           </div>
         </>
       )}

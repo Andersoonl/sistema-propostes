@@ -8,6 +8,7 @@ const navItems = [
   { href: '/dia', label: 'Lançamento' },
   { href: '/dash/producao', label: 'Dashboard Produção' },
   { href: '/dash/paradas', label: 'Dashboard Paradas' },
+  { href: '/produtos', label: 'Produtos' },
   { href: '/motivos', label: 'Motivos de Parada' },
   { href: '/turnos', label: 'Turnos' },
 ]
