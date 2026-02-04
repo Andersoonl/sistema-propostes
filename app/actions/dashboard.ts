@@ -13,6 +13,7 @@ interface MonthlyProductionData {
   VP2Pieces: number
   HZENPieces: number
   totalPieces: number
+  hasProduction: boolean
 }
 
 export async function getMonthlyProductionData(year: number, month: number) {
@@ -51,6 +52,7 @@ export async function getMonthlyProductionData(year: number, month: number) {
       VP2Pieces: 0,
       HZENPieces: 0,
       totalPieces: 0,
+      hasProduction: false,
     }
   }
 
@@ -66,6 +68,7 @@ export async function getMonthlyProductionData(year: number, month: number) {
       dataByDate[dateStr][`${machineName}Pieces` as 'VP1Pieces' | 'VP2Pieces' | 'HZENPieces'] = totalPieces
       dataByDate[dateStr].total += totalCycles
       dataByDate[dateStr].totalPieces += totalPieces
+      dataByDate[dateStr].hasProduction = true
     }
   }
 

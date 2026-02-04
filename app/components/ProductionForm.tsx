@@ -30,14 +30,17 @@ export function ProductionForm({
 }: ProductionFormProps) {
   const [hasProductSwap, setHasProductSwap] = useState(existingData?.hasProductSwap ?? false)
   const [notes, setNotes] = useState(existingData?.notes ?? '')
-  const [items, setItems] = useState<ProductionItemInput[]>(
-    existingData?.productionItems.map((item) => ({
+  const [items, setItems] = useState<ProductionItemInput[]>(() => {
+    const existingItems = existingData?.productionItems.map((item) => ({
       productId: item.productId,
       cycles: item.cycles,
       startTime: item.startTime ?? '',
       endTime: item.endTime ?? '',
-    })) ?? [{ productId: '', cycles: 0, startTime: '', endTime: '' }]
-  )
+    }))
+    return existingItems && existingItems.length > 0
+      ? existingItems
+      : [{ productId: '', cycles: 0, startTime: '', endTime: '' }]
+  })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -157,6 +160,7 @@ export function ProductionForm({
                 min="0"
                 value={item.cycles}
                 onChange={(e) => updateItem(index, 'cycles', e.target.value === '' ? 0 : parseInt(e.target.value))}
+                onFocus={(e) => e.target.select()}
                 placeholder="Digite a quantidade de ciclos"
               />
             </div>

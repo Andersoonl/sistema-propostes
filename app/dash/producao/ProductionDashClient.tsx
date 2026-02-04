@@ -26,6 +26,7 @@ interface MonthlyProductionData {
   VP2Pieces: number
   HZENPieces: number
   totalPieces: number
+  hasProduction: boolean
 }
 
 interface DailySummary {
@@ -92,14 +93,15 @@ export function ProductionDashClient({
     setLoading(false)
   }
 
-  // Calcular totais por máquina
+  // Calcular totais por máquina (apenas dias com lançamento)
   const machineStats = ['VP1', 'VP2', 'HZEN'].map((machine) => {
     const machineData = summary.filter((s) => s.machineName === machine)
-    const totalCycles = machineData.reduce((sum, s) => sum + s.productionCycles, 0)
-    const totalDowntime = machineData.reduce((sum, s) => sum + s.downtimeMinutes, 0)
-    const totalShift = machineData.reduce((sum, s) => sum + s.shiftMinutes, 0)
-    // Contar apenas dias com lançamento (hasProduction = true)
-    const workDays = machineData.filter((s) => s.hasProduction).length
+    // Filtrar apenas dias com lançamento para estatísticas
+    const daysWithProduction = machineData.filter((s) => s.hasProduction)
+    const totalCycles = daysWithProduction.reduce((sum, s) => sum + s.productionCycles, 0)
+    const totalDowntime = daysWithProduction.reduce((sum, s) => sum + s.downtimeMinutes, 0)
+    const totalShift = daysWithProduction.reduce((sum, s) => sum + s.shiftMinutes, 0)
+    const workDays = daysWithProduction.length
 
     return {
       machine,
@@ -115,13 +117,11 @@ export function ProductionDashClient({
   const totalCycles = machineStats.reduce((sum, s) => sum + s.totalCycles, 0)
   const totalPieces = (productPieces || []).reduce((sum, p) => sum + p.totalPieces, 0)
 
-  // Formatar dados para gráfico de barras diário
-  const chartData = productionData
-    .filter((d) => d.total > 0 || productionData.some((p) => p.date === d.date))
-    .map((d) => ({
-      ...d,
-      day: new Date(d.date + 'T12:00:00').getDate(),
-    }))
+  // Formatar dados para gráfico (todos os dias, incluindo sem lançamento)
+  const chartData = productionData.map((d) => ({
+    ...d,
+    day: new Date(d.date + 'T12:00:00').getDate(),
+  }))
 
   return (
     <div>
