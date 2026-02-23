@@ -1,4 +1,4 @@
-import { getMonthlyProductionData, getMonthlySummary, getMonthlyProductPiecesSummary } from '@/app/actions/dashboard'
+import { getMonthlyProductionData, getMonthlySummary, getMonthlyProductPiecesSummary, getMonthlyDowntimeData, getDowntimePareto } from '@/app/actions/dashboard'
 import { ProductionDashClient } from './ProductionDashClient'
 
 export default async function ProductionDashPage() {
@@ -6,10 +6,12 @@ export default async function ProductionDashPage() {
   const year = now.getFullYear()
   const month = now.getMonth() + 1
 
-  const [productionData, summary, productPieces] = await Promise.all([
+  const [productionData, summary, productPieces, downtimeData, paretoNV1] = await Promise.all([
     getMonthlyProductionData(year, month),
     getMonthlySummary(year, month),
     getMonthlyProductPiecesSummary(year, month),
+    getMonthlyDowntimeData(year, month),
+    getDowntimePareto(year, month, 1),
   ])
 
   return (
@@ -19,6 +21,8 @@ export default async function ProductionDashPage() {
       initialProductionData={productionData}
       initialSummary={summary}
       initialProductPieces={productPieces}
+      initialDowntimeData={downtimeData}
+      initialParetoNV1={paretoNV1}
     />
   )
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { fmtInt, fmtDec, fmtMoney } from '@/lib/format'
 
 interface Ingredient {
   id: string
@@ -24,6 +25,8 @@ interface CostRecipe {
   cyclesPerBatch: number
   piecesPerM2: number
   avgPieceWeightKg: number
+  piecesPerPallet: number | null
+  m2PerPallet: number | null
   palletCost: number
   strappingCost: number
   plasticCost: number
@@ -47,6 +50,8 @@ interface RecipeInput {
   cyclesPerBatch: number
   piecesPerM2: number
   avgPieceWeightKg: number
+  piecesPerPallet: number | null
+  m2PerPallet: number | null
   palletCost: number
   strappingCost: number
   plasticCost: number
@@ -72,6 +77,8 @@ export function RecipeForm({ product, recipe, ingredients, onClose, onSave, onDe
   const [cyclesPerBatch, setCyclesPerBatch] = useState(recipe?.cyclesPerBatch ?? 1)
   const [piecesPerM2, setPiecesPerM2] = useState(recipe?.piecesPerM2 ?? 1)
   const [avgPieceWeightKg, setAvgPieceWeightKg] = useState(recipe?.avgPieceWeightKg ?? 0)
+  const [piecesPerPallet, setPiecesPerPallet] = useState(recipe?.piecesPerPallet ?? 0)
+  const [m2PerPallet, setM2PerPallet] = useState(recipe?.m2PerPallet ?? 0)
 
   // Custos extras
   const [palletCost, setPalletCost] = useState(recipe?.palletCost ?? 0)
@@ -125,6 +132,8 @@ export function RecipeForm({ product, recipe, ingredients, onClose, onSave, onDe
         cyclesPerBatch,
         piecesPerM2,
         avgPieceWeightKg,
+        piecesPerPallet: piecesPerPallet || null,
+        m2PerPallet: m2PerPallet || null,
         palletCost,
         strappingCost,
         plasticCost,
@@ -176,7 +185,7 @@ export function RecipeForm({ product, recipe, ingredients, onClose, onSave, onDe
           {/* Parâmetros de Produção */}
           <section>
             <h3 className="text-lg font-medium text-gray-900 mb-4">Parâmetros de Produção</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Densidade
@@ -243,6 +252,31 @@ export function RecipeForm({ product, recipe, ingredients, onClose, onSave, onDe
                   required
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Peças/Pallet
+                </label>
+                <input
+                  type="number"
+                  value={piecesPerPallet}
+                  onChange={(e) => setPiecesPerPallet(parseInt(e.target.value) || 0)}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-[#3bbfb5] focus:ring-[#3bbfb5]"
+                  min={0}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  m²/Pallet
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={m2PerPallet}
+                  onChange={(e) => setM2PerPallet(parseFloat(e.target.value) || 0)}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-[#3bbfb5] focus:ring-[#3bbfb5]"
+                  min={0}
+                />
+              </div>
             </div>
           </section>
 
@@ -285,7 +319,7 @@ export function RecipeForm({ product, recipe, ingredients, onClose, onSave, onDe
                           {ingredient.unit}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-500 text-right">
-                          R$ {ingredient.unitPrice.toFixed(4)}
+                          {fmtMoney(ingredient.unitPrice, 4)}
                         </td>
                         <td className="px-4 py-3">
                           <input
@@ -299,7 +333,7 @@ export function RecipeForm({ product, recipe, ingredients, onClose, onSave, onDe
                           />
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
-                          R$ {cost.toFixed(2)}
+                          {fmtMoney(cost)}
                         </td>
                       </tr>
                     )
@@ -311,7 +345,7 @@ export function RecipeForm({ product, recipe, ingredients, onClose, onSave, onDe
                       Custo do Traço:
                     </td>
                     <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right">
-                      R$ {batchCost.toFixed(2)}
+                      {fmtMoney(batchCost)}
                     </td>
                   </tr>
                 </tfoot>
@@ -368,19 +402,19 @@ export function RecipeForm({ product, recipe, ingredients, onClose, onSave, onDe
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-white rounded-lg p-4 shadow-sm">
                 <p className="text-sm text-gray-500">Custo do Traço</p>
-                <p className="text-xl font-bold text-gray-900">R$ {batchCost.toFixed(2)}</p>
+                <p className="text-xl font-bold text-gray-900">{fmtMoney(batchCost)}</p>
               </div>
               <div className="bg-white rounded-lg p-4 shadow-sm">
                 <p className="text-sm text-gray-500">Peças por Traço</p>
-                <p className="text-xl font-bold text-gray-900">{piecesPerBatch.toFixed(0)}</p>
+                <p className="text-xl font-bold text-gray-900">{fmtInt(piecesPerBatch)}</p>
               </div>
               <div className="bg-white rounded-lg p-4 shadow-sm">
                 <p className="text-sm text-gray-500">Custo por Peça</p>
-                <p className="text-xl font-bold text-[#2d3e7e]">R$ {costPerPiece.toFixed(4)}</p>
+                <p className="text-xl font-bold text-[#2d3e7e]">{fmtMoney(costPerPiece, 4)}</p>
               </div>
               <div className="bg-white rounded-lg p-4 shadow-sm">
                 <p className="text-sm text-gray-500">Custo por m²</p>
-                <p className="text-xl font-bold text-[#3bbfb5]">R$ {costPerM2.toFixed(2)}</p>
+                <p className="text-xl font-bold text-[#3bbfb5]">{fmtMoney(costPerM2)}</p>
               </div>
             </div>
           </section>

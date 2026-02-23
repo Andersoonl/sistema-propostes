@@ -42,7 +42,7 @@ export async function deleteIngredient(id: string) {
 
 export async function getProductsWithRecipes() {
   return prisma.product.findMany({
-    orderBy: { name: 'asc' },
+    orderBy: [{ category: 'asc' }, { subcategory: 'asc' }, { name: 'asc' }],
     include: {
       costRecipe: {
         include: {
@@ -90,6 +90,8 @@ interface RecipeInput {
   cyclesPerBatch: number
   piecesPerM2: number
   avgPieceWeightKg: number
+  piecesPerPallet?: number | null
+  m2PerPallet?: number | null
   palletCost: number
   strappingCost: number
   plasticCost: number
@@ -116,6 +118,8 @@ export async function saveRecipe(input: RecipeInput) {
         cyclesPerBatch: input.cyclesPerBatch,
         piecesPerM2: input.piecesPerM2,
         avgPieceWeightKg: input.avgPieceWeightKg,
+        piecesPerPallet: input.piecesPerPallet ?? null,
+        m2PerPallet: input.m2PerPallet ?? null,
         palletCost: input.palletCost,
         strappingCost: input.strappingCost,
         plasticCost: input.plasticCost,
@@ -145,6 +149,8 @@ export async function saveRecipe(input: RecipeInput) {
         cyclesPerBatch: input.cyclesPerBatch,
         piecesPerM2: input.piecesPerM2,
         avgPieceWeightKg: input.avgPieceWeightKg,
+        piecesPerPallet: input.piecesPerPallet ?? null,
+        m2PerPallet: input.m2PerPallet ?? null,
         palletCost: input.palletCost,
         strappingCost: input.strappingCost,
         plasticCost: input.plasticCost,

@@ -271,25 +271,86 @@ async function main() {
   await seedReasonsForMachine(hzen.id, hzenReasons)
   console.log('Motivos HZEN criados')
 
-  // Criar produtos de exemplo
-  const products = [
-    'Bloco 14x19x39',
-    'Bloco 19x19x39',
-    'Paver 10x20',
-    'Paver 10x10',
-    'Meio-fio',
-    'Canaleta',
+  // Criar produtos do catálogo
+  const productCatalog: { name: string; category: string; subcategory: string }[] = [
+    // PISO INTERTRAVADO - PAVER
+    { name: 'PAVER H4 25Mpa', category: 'PISO INTERTRAVADO', subcategory: 'PAVER' },
+    { name: 'PAVER H4 25Mpa (VERMELHO)', category: 'PISO INTERTRAVADO', subcategory: 'PAVER' },
+    { name: 'PAVER H4 25Mpa (GRAFITE)', category: 'PISO INTERTRAVADO', subcategory: 'PAVER' },
+    { name: 'PAVER H4 35Mpa', category: 'PISO INTERTRAVADO', subcategory: 'PAVER' },
+    { name: 'PAVER H6 35Mpa VP', category: 'PISO INTERTRAVADO', subcategory: 'PAVER' },
+    { name: 'PAVER H6 35Mpa HZ', category: 'PISO INTERTRAVADO', subcategory: 'PAVER' },
+    { name: 'PAVER H6 TERRA COTA', category: 'PISO INTERTRAVADO', subcategory: 'PAVER' },
+    { name: 'PAVER H6 DRENANTE', category: 'PISO INTERTRAVADO', subcategory: 'PAVER' },
+    { name: 'PAVER H8 35Mpa VP', category: 'PISO INTERTRAVADO', subcategory: 'PAVER' },
+    { name: 'PAVER H8 35Mpa HZ', category: 'PISO INTERTRAVADO', subcategory: 'PAVER' },
+    { name: 'PAVER H8 50Mpa', category: 'PISO INTERTRAVADO', subcategory: 'PAVER' },
+    { name: 'PAVER H8 Amarelo', category: 'PISO INTERTRAVADO', subcategory: 'PAVER' },
+    { name: 'PAVER H8 Vermelho', category: 'PISO INTERTRAVADO', subcategory: 'PAVER' },
+    { name: 'PAVER H8 Grafite', category: 'PISO INTERTRAVADO', subcategory: 'PAVER' },
+    { name: 'PAVER H8 DRENANTE', category: 'PISO INTERTRAVADO', subcategory: 'PAVER' },
+    // PISO INTERTRAVADO - PISOGRAMA
+    { name: 'PISOGRAMA H8 35Mpa', category: 'PISO INTERTRAVADO', subcategory: 'PISOGRAMA' },
+    // PISO INTERTRAVADO - UNISTEIN
+    { name: 'UNISTEIN H6 35Mpa VP', category: 'PISO INTERTRAVADO', subcategory: 'UNISTEIN' },
+    { name: 'UNISTEIN H6 35Mpa HZ', category: 'PISO INTERTRAVADO', subcategory: 'UNISTEIN' },
+    { name: 'UNISTEIN H6 35Mpa 2ª', category: 'PISO INTERTRAVADO', subcategory: 'UNISTEIN' },
+    { name: 'UNISTEIN H6 DRENANTE', category: 'PISO INTERTRAVADO', subcategory: 'UNISTEIN' },
+    { name: 'UNISTEIN H8 DRENANTE', category: 'PISO INTERTRAVADO', subcategory: 'UNISTEIN' },
+    { name: 'UNISTEIN H8 35Mpa (HZ)', category: 'PISO INTERTRAVADO', subcategory: 'UNISTEIN' },
+    { name: 'UNISTEIN H8 35Mpa (VP)', category: 'PISO INTERTRAVADO', subcategory: 'UNISTEIN' },
+    { name: 'UNISTEIN H8 AMARELO', category: 'PISO INTERTRAVADO', subcategory: 'UNISTEIN' },
+    { name: 'UNISTEIN H8 VERMELHO', category: 'PISO INTERTRAVADO', subcategory: 'UNISTEIN' },
+    { name: 'UNISTEIN H8 40Mpa', category: 'PISO INTERTRAVADO', subcategory: 'UNISTEIN' },
+    { name: 'UNISTEIN H10 35Mpa', category: 'PISO INTERTRAVADO', subcategory: 'UNISTEIN' },
+    { name: 'UNISTEIN H10 DRENANTE', category: 'PISO INTERTRAVADO', subcategory: 'UNISTEIN' },
+    // PISO INTERTRAVADO - CITYPLAC
+    { name: '50x50 LISO', category: 'PISO INTERTRAVADO', subcategory: 'CITYPLAC' },
+    { name: '50x50 DRENANTE', category: 'PISO INTERTRAVADO', subcategory: 'CITYPLAC' },
+    // BLOCO DE CONCRETO - FAMILIA 09
+    { name: 'BV09 3,0Mpa', category: 'BLOCO DE CONCRETO', subcategory: 'FAMILIA 09' },
+    { name: 'CL09 3,0Mpa', category: 'BLOCO DE CONCRETO', subcategory: 'FAMILIA 09' },
+    { name: 'MB09 3,0Mpa', category: 'BLOCO DE CONCRETO', subcategory: 'FAMILIA 09' },
+    // BLOCO DE CONCRETO - FAMILIA 14
+    { name: 'BV14 3,0Mpa', category: 'BLOCO DE CONCRETO', subcategory: 'FAMILIA 14' },
+    { name: 'BE14 4,5Mpa', category: 'BLOCO DE CONCRETO', subcategory: 'FAMILIA 14' },
+    { name: 'BE14 8,0Mpa', category: 'BLOCO DE CONCRETO', subcategory: 'FAMILIA 14' },
+    { name: 'CL14 4,5Mpa', category: 'BLOCO DE CONCRETO', subcategory: 'FAMILIA 14' },
+    { name: 'MB14 4,5Mpa', category: 'BLOCO DE CONCRETO', subcategory: 'FAMILIA 14' },
+    // BLOCO DE CONCRETO - FAMILIA 19
+    { name: 'BV19 3,0Mpa', category: 'BLOCO DE CONCRETO', subcategory: 'FAMILIA 19' },
+    { name: 'BE19 4,5Mpa', category: 'BLOCO DE CONCRETO', subcategory: 'FAMILIA 19' },
+    { name: 'BE19 6,0Mpa', category: 'BLOCO DE CONCRETO', subcategory: 'FAMILIA 19' },
+    { name: 'BE19 8,0Mpa', category: 'BLOCO DE CONCRETO', subcategory: 'FAMILIA 19' },
+    { name: 'CL19 4,5Mpa', category: 'BLOCO DE CONCRETO', subcategory: 'FAMILIA 19' },
+    { name: 'MB19 4,5Mpa', category: 'BLOCO DE CONCRETO', subcategory: 'FAMILIA 19' },
+    // BLOCO DE CONCRETO - FAMILIA 29
+    { name: 'BE29 4,5Mpa', category: 'BLOCO DE CONCRETO', subcategory: 'FAMILIA 29' },
+    { name: 'BE29 6,0Mpa', category: 'BLOCO DE CONCRETO', subcategory: 'FAMILIA 29' },
+    { name: 'BE29 18MPpa', category: 'BLOCO DE CONCRETO', subcategory: 'FAMILIA 29' },
+    { name: 'BE29 16MPpa', category: 'BLOCO DE CONCRETO', subcategory: 'FAMILIA 29' },
+    { name: 'BE29 14Mpa', category: 'BLOCO DE CONCRETO', subcategory: 'FAMILIA 29' },
+    { name: 'BE29 10,0Mpa', category: 'BLOCO DE CONCRETO', subcategory: 'FAMILIA 29' },
+    { name: 'CL29 4,5Mpa', category: 'BLOCO DE CONCRETO', subcategory: 'FAMILIA 29' },
+    { name: 'CL29 12,0Mpa', category: 'BLOCO DE CONCRETO', subcategory: 'FAMILIA 29' },
+    { name: 'MB29 6,0Mpa', category: 'BLOCO DE CONCRETO', subcategory: 'FAMILIA 29' },
   ]
 
-  for (const name of products) {
+  // Remover produtos antigos que não estão no catálogo
+  const catalogNames = productCatalog.map((p) => p.name)
+  await prisma.product.deleteMany({
+    where: { name: { notIn: catalogNames } },
+  })
+
+  for (const product of productCatalog) {
     await prisma.product.upsert({
-      where: { name },
-      update: {},
-      create: { name },
+      where: { name: product.name },
+      update: { category: product.category, subcategory: product.subcategory },
+      create: product,
     })
   }
 
-  console.log('Produtos criados:', products.join(', '))
+  console.log(`Produtos criados: ${productCatalog.length} produtos`)
 
   // Criar ingredientes padrão
   const ingredients = [

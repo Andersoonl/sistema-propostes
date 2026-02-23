@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { fmtDec } from '@/lib/format'
 import { MonthPicker } from '@/app/components/DatePicker'
 import { getMonthlyDowntimeData, getDowntimePareto } from '@/app/actions/dashboard'
 import {
@@ -228,7 +229,7 @@ export function DowntimeDashClient({
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-right">{item.count}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                        {totalMinutes > 0 ? ((item.totalMinutes / totalMinutes) * 100).toFixed(1) : 0}%
+                        {totalMinutes > 0 ? fmtDec((item.totalMinutes / totalMinutes) * 100, 1) : 0}%
                       </td>
                     </tr>
                   ))}

@@ -9,6 +9,7 @@ import { DatePicker } from '@/app/components/DatePicker'
 import { ProductionForm } from '@/app/components/ProductionForm'
 import { DowntimeForm } from '@/app/components/DowntimeForm'
 import { formatMinutes, getDayOfWeekName } from '@/lib/shift'
+import { fmtInt, fmtMax } from '@/lib/format'
 
 interface DiaClientProps {
   machines: Machine[]
@@ -314,22 +315,47 @@ export function DiaClient({ machines, products }: DiaClientProps) {
                   )}
 
                   {!isEditing && (
-                    <div className="grid grid-cols-2 gap-4 mt-3">
-                      <div className="bg-white rounded-md p-2 text-center">
-                        <div className={`text-2xl font-bold ${
-                          machine.name === 'VP1'
-                            ? 'text-green-600'
-                            : machine.name === 'VP2'
-                            ? 'text-blue-600'
-                            : 'text-orange-600'
-                        }`}>{totalCycles}</div>
-                        <div className="text-xs text-gray-500 uppercase tracking-wide">Ciclos</div>
+                    <>
+                      <div className="grid grid-cols-2 gap-4 mt-3">
+                        <div className="bg-white rounded-md p-2 text-center">
+                          <div className={`text-2xl font-bold ${
+                            machine.name === 'VP1'
+                              ? 'text-green-600'
+                              : machine.name === 'VP2'
+                              ? 'text-blue-600'
+                              : 'text-orange-600'
+                          }`}>{totalCycles}</div>
+                          <div className="text-xs text-gray-500 uppercase tracking-wide">Ciclos</div>
+                        </div>
+                        <div className="bg-white rounded-md p-2 text-center">
+                          <div className="text-2xl font-bold text-gray-600">{totalDowntime}</div>
+                          <div className="text-xs text-gray-500 uppercase tracking-wide">Min Paradas</div>
+                        </div>
                       </div>
-                      <div className="bg-white rounded-md p-2 text-center">
-                        <div className="text-2xl font-bold text-gray-600">{totalDowntime}</div>
-                        <div className="text-xs text-gray-500 uppercase tracking-wide">Min Paradas</div>
-                      </div>
-                    </div>
+                      {/* Cadeia de conversão: Peças → Pallets → m² */}
+                      {pd && pd.productionItems.some(item => item.pieces) && (
+                        <div className="grid grid-cols-3 gap-2 mt-2">
+                          <div className="bg-white rounded-md p-2 text-center">
+                            <div className="text-lg font-bold text-indigo-600">
+                              {fmtInt(pd.productionItems.reduce((sum, item) => sum + (item.pieces || 0), 0))}
+                            </div>
+                            <div className="text-xs text-gray-500 uppercase tracking-wide">Peças</div>
+                          </div>
+                          <div className="bg-white rounded-md p-2 text-center">
+                            <div className="text-lg font-bold text-purple-600">
+                              {fmtMax(pd.productionItems.reduce((sum, item) => sum + (item.pallets || 0), 0), 1)}
+                            </div>
+                            <div className="text-xs text-gray-500 uppercase tracking-wide">Pallets</div>
+                          </div>
+                          <div className="bg-white rounded-md p-2 text-center">
+                            <div className="text-lg font-bold text-teal-600">
+                              {fmtMax(pd.productionItems.reduce((sum, item) => sum + (item.areaM2 || 0), 0), 1)}
+                            </div>
+                            <div className="text-xs text-gray-500 uppercase tracking-wide">m²</div>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
 

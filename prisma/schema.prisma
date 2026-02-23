@@ -35,22 +35,26 @@ model MachineShift {
 
 // Produtos que podem ser produzidos
 model Product {
-  id              String           @id @default(cuid())
-  name            String           @unique
-  productionItems ProductionItem[]
-  costRecipe      CostRecipe?
-  createdAt       DateTime         @default(now())
+  id                 String              @id @default(cuid())
+  name               String              @unique
+  category           String?             // PISO INTERTRAVADO, BLOCO DE CONCRETO
+  subcategory        String?             // PAVER, UNISTEIN, FAMILIA 09, etc.
+  productionItems    ProductionItem[]
+  costRecipe         CostRecipe?
+  inventoryMovements InventoryMovement[]
+  createdAt          DateTime            @default(now())
 }
 
 // Ingredientes/Materiais (dados mestre)
 model Ingredient {
-  id          String       @id @default(cuid())
-  name        String       @unique
-  unit        String       // kg, ml, un
-  unitPrice   Float        // R$/unidade
-  recipeItems RecipeItem[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id              String          @id @default(cuid())
+  name            String          @unique
+  unit            String          // kg, ml, un
+  unitPrice       Float           // R$/unidade
+  recipeItems     RecipeItem[]
+  materialEntries MaterialEntry[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 }
 
 // Receita de custo do produto
@@ -65,6 +69,8 @@ model CostRecipe {
   cyclesPerBatch   Float        // Ciclos por traço
   piecesPerM2      Float        // Peças por m²
   avgPieceWeightKg Float        // Peso médio da peça (kg)
+  piecesPerPallet  Int?         // Peças por pallet (blocos)
+  m2PerPallet      Float?       // m² por pallet (pisos)
 
   // Custos extras (R$)
   palletCost       Float        @default(0)
@@ -129,6 +135,8 @@ model ProductionItem {
   product         Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
   cycles          Int           // Quantidade de ciclos
   pieces          Int?          // Peças produzidas (calculado: ciclos * piecesPerCycle da receita)
+  pallets         Float?        // Pallets (calculado: peças / piecesPerPallet)
+  areaM2          Float?        // m² (calculado: peças / piecesPerM2)
   startTime       String?       // HH:mm (opcional)
   endTime         String?       // HH:mm (opcional)
   createdAt       DateTime      @default(now())
@@ -162,4 +170,33 @@ model DowntimeEvent {
   durationMinutes Int            // Duração em minutos
   notes           String?        // Observação opcional
   createdAt       DateTime       @default(now())
+}
+
+// Entrada de matéria prima (compras)
+model MaterialEntry {
+  id            String     @id @default(cuid())
+  ingredientId  String
+  ingredient    Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  date          DateTime
+  quantity      Float      // quantidade comprada
+  unitPrice     Float      // preço unitário na compra
+  supplier      String?    // fornecedor
+  invoiceNumber String?    // número NF
+  notes         String?
+  createdAt     DateTime   @default(now())
+}
+
+// Movimentação de estoque de produto acabado
+model InventoryMovement {
+  id              String   @id @default(cuid())
+  productId       String
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  date            DateTime
+  type            String   // 'IN' (produção) ou 'OUT' (saída/venda)
+  quantityPieces  Int
+  quantityPallets Float?
+  areaM2          Float?
+  notes           String?
+  productionDayId String?  // referência ao dia de produção (quando tipo IN automático)
+  createdAt       DateTime @default(now())
 }

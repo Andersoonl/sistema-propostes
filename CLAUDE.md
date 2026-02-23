@@ -57,6 +57,7 @@ app/
 └── generated/prisma/  # Cliente Prisma (gerado)
 
 lib/
+├── format.ts          # Formatação numérica padrão BR (OBRIGATÓRIO)
 ├── prisma.ts          # Singleton do Prisma
 └── shift.ts           # Lógica de cálculo de turno
 
@@ -90,6 +91,20 @@ import { PrismaLibSql } from '@prisma/adapter-libsql'
 
 const adapter = new PrismaLibSql({ url: 'file:./dev.db' })
 const prisma = new PrismaClient({ adapter })
+```
+
+### Formatação Numérica (OBRIGATÓRIO)
+Padrão brasileiro: ponto (.) para milhares, vírgula (,) para decimais. **NUNCA use `.toFixed()` ou `.toLocaleString()` diretamente.** Sempre importe e use as funções de `lib/format.ts`:
+
+```typescript
+import { fmtInt, fmtDec, fmtMax, fmtMoney, fmtPct } from '@/lib/format'
+
+fmtInt(1234)          // "1.234"
+fmtDec(12.5, 2)       // "12,50"       (N casas fixas)
+fmtMax(12.5, 2)       // "12,5"        (até N casas, sem zeros)
+fmtMoney(1234.5)      // "R$ 1.234,50" (default 2 casas)
+fmtMoney(0.1234, 4)   // "R$ 0,1234"   (4 casas)
+fmtPct(85.3)          // "85,3%"       (default 1 casa)
 ```
 
 ### Turno

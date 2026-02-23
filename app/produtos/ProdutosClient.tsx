@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { fmtInt, fmtMoney } from '@/lib/format'
 import { createProduct, deleteProduct } from '@/app/actions/production'
 import {
   createIngredient,
@@ -34,6 +35,8 @@ interface CostRecipe {
   cyclesPerBatch: number
   piecesPerM2: number
   avgPieceWeightKg: number
+  piecesPerPallet: number | null
+  m2PerPallet: number | null
   palletCost: number
   strappingCost: number
   plasticCost: number
@@ -43,6 +46,8 @@ interface CostRecipe {
 interface Product {
   id: string
   name: string
+  category: string | null
+  subcategory: string | null
   costRecipe: CostRecipe | null
 }
 
@@ -51,13 +56,35 @@ interface Props {
   ingredients: Ingredient[]
 }
 
+const CATEGORIES = ['PISO INTERTRAVADO', 'BLOCO DE CONCRETO'] as const
+const SUBCATEGORIES: Record<string, string[]> = {
+  'PISO INTERTRAVADO': ['PAVER', 'PISOGRAMA', 'UNISTEIN', 'CITYPLAC'],
+  'BLOCO DE CONCRETO': ['FAMILIA 09', 'FAMILIA 14', 'FAMILIA 19', 'FAMILIA 29'],
+}
+
 export function ProdutosClient({ products, ingredients }: Props) {
   const [showNewProductForm, setShowNewProductForm] = useState(false)
   const [showIngredientManager, setShowIngredientManager] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [newProductName, setNewProductName] = useState('')
+  const [newProductCategory, setNewProductCategory] = useState('')
+  const [newProductSubcategory, setNewProductSubcategory] = useState('')
+  const [filterCategory, setFilterCategory] = useState('')
+  const [filterSubcategory, setFilterSubcategory] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Filtrar produtos
+  const filteredProducts = products.filter((p) => {
+    if (filterCategory && p.category !== filterCategory) return false
+    if (filterSubcategory && p.subcategory !== filterSubcategory) return false
+    return true
+  })
+
+  // Subcategorias disponíveis para o filtro
+  const availableSubcategories = filterCategory ? (SUBCATEGORIES[filterCategory] || []) : []
+  // Subcategorias para o formulário de novo produto
+  const newProductSubcategories = newProductCategory ? (SUBCATEGORIES[newProductCategory] || []) : []
 
   const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -66,8 +93,14 @@ export function ProdutosClient({ products, ingredients }: Props) {
     setLoading(true)
     setError(null)
     try {
-      await createProduct(newProductName.trim())
+      await createProduct(
+        newProductName.trim(),
+        newProductCategory || undefined,
+        newProductSubcategory || undefined
+      )
       setNewProductName('')
+      setNewProductCategory('')
+      setNewProductSubcategory('')
       setShowNewProductForm(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao criar produto')
@@ -129,6 +162,43 @@ export function ProdutosClient({ products, ingredients }: Props) {
         </button>
       </div>
 
+      {/* Filtros por Categoria / Subcategoria */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex flex-wrap gap-4 items-end">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
+          <select
+            value={filterCategory}
+            onChange={(e) => {
+              setFilterCategory(e.target.value)
+              setFilterSubcategory('')
+            }}
+            className="rounded-md border-gray-300 shadow-sm focus:border-[#3bbfb5] focus:ring-[#3bbfb5] text-sm"
+          >
+            <option value="">Todas</option>
+            {CATEGORIES.map((cat) => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Subcategoria</label>
+          <select
+            value={filterSubcategory}
+            onChange={(e) => setFilterSubcategory(e.target.value)}
+            className="rounded-md border-gray-300 shadow-sm focus:border-[#3bbfb5] focus:ring-[#3bbfb5] text-sm"
+            disabled={!filterCategory}
+          >
+            <option value="">Todas</option>
+            {availableSubcategories.map((sub) => (
+              <option key={sub} value={sub}>{sub}</option>
+            ))}
+          </select>
+        </div>
+        <div className="text-sm text-gray-500">
+          {filteredProducts.length} produto{filteredProducts.length !== 1 ? 's' : ''}
+        </div>
+      </div>
+
       {/* Erro */}
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-md p-4">
@@ -140,39 +210,78 @@ export function ProdutosClient({ products, ingredients }: Props) {
       {showNewProductForm && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Novo Produto</h3>
-          <form onSubmit={handleCreateProduct} className="flex gap-3">
-            <input
-              type="text"
-              value={newProductName}
-              onChange={(e) => setNewProductName(e.target.value)}
-              placeholder="Nome do produto"
-              className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-[#3bbfb5] focus:ring-[#3bbfb5]"
-              autoFocus
-            />
-            <button
-              type="submit"
-              disabled={loading || !newProductName.trim()}
-              className="px-4 py-2 bg-[#3bbfb5] text-white rounded-md hover:bg-[#2ea69d] disabled:opacity-50 transition-colors"
-            >
-              {loading ? 'Salvando...' : 'Criar'}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setShowNewProductForm(false)
-                setNewProductName('')
-              }}
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
-            >
-              Cancelar
-            </button>
+          <form onSubmit={handleCreateProduct} className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
+                <select
+                  value={newProductCategory}
+                  onChange={(e) => {
+                    setNewProductCategory(e.target.value)
+                    setNewProductSubcategory('')
+                  }}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-[#3bbfb5] focus:ring-[#3bbfb5]"
+                >
+                  <option value="">Selecione...</option>
+                  {CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Subcategoria</label>
+                <select
+                  value={newProductSubcategory}
+                  onChange={(e) => setNewProductSubcategory(e.target.value)}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-[#3bbfb5] focus:ring-[#3bbfb5]"
+                  disabled={!newProductCategory}
+                >
+                  <option value="">Selecione...</option>
+                  {newProductSubcategories.map((sub) => (
+                    <option key={sub} value={sub}>{sub}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Produto</label>
+                <input
+                  type="text"
+                  value={newProductName}
+                  onChange={(e) => setNewProductName(e.target.value)}
+                  placeholder="Nome do produto"
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-[#3bbfb5] focus:ring-[#3bbfb5]"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNewProductForm(false)
+                  setNewProductName('')
+                  setNewProductCategory('')
+                  setNewProductSubcategory('')
+                }}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={loading || !newProductName.trim()}
+                className="px-4 py-2 bg-[#3bbfb5] text-white rounded-md hover:bg-[#2ea69d] disabled:opacity-50 transition-colors"
+              >
+                {loading ? 'Salvando...' : 'Criar'}
+              </button>
+            </div>
           </form>
         </div>
       )}
 
       {/* Lista de produtos */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {products.map((product) => {
+        {filteredProducts.map((product) => {
           const recipe = product.costRecipe
           const costs = recipe ? calculateCosts(recipe) : null
 
@@ -183,7 +292,12 @@ export function ProdutosClient({ products, ingredients }: Props) {
             >
               <div className="p-4">
                 <div className="flex justify-between items-start">
-                  <h3 className="text-lg font-medium text-gray-900">{product.name}</h3>
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900">{product.name}</h3>
+                    {product.subcategory && (
+                      <span className="text-xs text-gray-500">{product.subcategory}</span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1">
                     {recipe ? (
                       <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
@@ -201,15 +315,15 @@ export function ProdutosClient({ products, ingredients }: Props) {
                   <div className="mt-3 space-y-1 text-sm text-gray-600">
                     <p>
                       <span className="font-medium">Custo/peça:</span>{' '}
-                      R$ {costs.costPerPiece.toFixed(4)}
+                      {fmtMoney(costs.costPerPiece, 4)}
                     </p>
                     <p>
                       <span className="font-medium">Custo/m²:</span>{' '}
-                      R$ {costs.costPerM2.toFixed(2)}
+                      {fmtMoney(costs.costPerM2)}
                     </p>
                     <p>
                       <span className="font-medium">Peças/traço:</span>{' '}
-                      {costs.piecesPerBatch.toFixed(0)}
+                      {fmtInt(costs.piecesPerBatch)}
                     </p>
                   </div>
                 )}
@@ -237,7 +351,7 @@ export function ProdutosClient({ products, ingredients }: Props) {
         })}
       </div>
 
-      {products.length === 0 && (
+      {filteredProducts.length === 0 && (
         <div className="text-center py-12">
           <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />

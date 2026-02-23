@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { fmtDec } from '@/lib/format'
 
 interface Ingredient {
   id: string
@@ -298,7 +299,7 @@ function IngredientRow({ ingredient, isEditing, onEdit, onCancel, onSave, onDele
       <td className="px-4 py-3 text-sm text-gray-900">{ingredient.name}</td>
       <td className="px-4 py-3 text-sm text-gray-500">{ingredient.unit}</td>
       <td className="px-4 py-3 text-sm text-gray-900 text-right">
-        {ingredient.unitPrice.toFixed(4)}
+        {fmtDec(ingredient.unitPrice, 4)}
       </td>
       <td className="px-4 py-3 text-right">
         <div className="flex justify-end gap-2">

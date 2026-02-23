@@ -145,11 +145,23 @@ export function ProductionForm({
                 onChange={(e) => updateItem(index, 'productId', e.target.value)}
               >
                 <option value="">Selecione um produto...</option>
-                {products.map((product) => (
-                  <option key={product.id} value={product.id}>
-                    {product.name}
-                  </option>
-                ))}
+                {(() => {
+                  const grouped: Record<string, typeof products> = {}
+                  for (const p of products) {
+                    const key = p.subcategory || p.category || 'Outros'
+                    if (!grouped[key]) grouped[key] = []
+                    grouped[key].push(p)
+                  }
+                  return Object.entries(grouped).map(([group, prods]) => (
+                    <optgroup key={group} label={group}>
+                      {prods.map((product) => (
+                        <option key={product.id} value={product.id}>
+                          {product.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))
+                })()}
               </select>
             </div>
 
