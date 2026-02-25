@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation'
+import { HomeClient } from './HomeClient'
 
 export default function Home() {
-  redirect('/dia')
+  return <HomeClient />
 }

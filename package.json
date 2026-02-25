@@ -1,5 +1,5 @@
 {
-  "name": "projeto-controle-producao",
+  "name": "propostes-erp",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -24,7 +24,8 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "recharts": "^3.7.0",
-    "tapable": "^2.3.0"
+    "tapable": "^2.3.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

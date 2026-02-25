@@ -186,6 +186,66 @@ model MaterialEntry {
   createdAt     DateTime   @default(now())
 }
 
+// Status do cliente
+enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+}
+
+// Cadastro de clientes
+model Customer {
+  id                String         @id @default(cuid())
+  companyName       String         // Razão social
+  tradeName         String?        // Nome fantasia
+  document          String         @unique // Apenas dígitos (11=CPF, 14=CNPJ)
+  documentType      String         // "CNPJ" ou "CPF"
+  stateRegistration String?        // Inscrição estadual
+  zipCode           String?        // CEP
+  street            String?        // Logradouro
+  number            String?        // Número
+  complement        String?        // Complemento
+  neighborhood      String?        // Bairro
+  city              String?        // Cidade
+  state             String?        // UF (2 letras)
+  phone             String?        // Telefone
+  email             String?        // Email
+  contactName       String?        // Contato principal
+  notes             String?        // Observações
+  status            CustomerStatus @default(ACTIVE)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+}
+
+// Status do fornecedor
+enum SupplierStatus {
+  ACTIVE
+  INACTIVE
+}
+
+// Cadastro de fornecedores
+model Supplier {
+  id                String         @id @default(cuid())
+  companyName       String         // Razão social
+  tradeName         String?        // Nome fantasia
+  document          String         @unique // Apenas dígitos (11=CPF, 14=CNPJ)
+  documentType      String         // "CNPJ" ou "CPF"
+  stateRegistration String?        // Inscrição estadual
+  zipCode           String?        // CEP
+  street            String?        // Logradouro
+  number            String?        // Número
+  complement        String?        // Complemento
+  neighborhood      String?        // Bairro
+  city              String?        // Cidade
+  state             String?        // UF (2 letras)
+  phone             String?        // Telefone
+  email             String?        // Email
+  contactName       String?        // Contato principal
+  notes             String?        // Observações
+  status            SupplierStatus @default(ACTIVE)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+}
+
 // Movimentação de estoque de produto acabado
 model InventoryMovement {
   id              String   @id @default(cuid())
