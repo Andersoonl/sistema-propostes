@@ -188,9 +188,12 @@ model MaterialEntry {
   date          DateTime
   quantity      Float      // quantidade comprada
   unitPrice     Float      // preço unitário na compra
-  supplier      String?    // fornecedor
+  supplier      String?    // fornecedor (legado, texto livre)
+  supplierId    String?    // FK para cadastro de fornecedor
+  supplierRef   Supplier?  @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   invoiceNumber String?    // número NF
   notes         String?
+  payable       Payable?
   createdAt     DateTime   @default(now())
 }
 
@@ -222,6 +225,7 @@ model Customer {
   status            CustomerStatus @default(ACTIVE)
   quotes            Quote[]
   orders            Order[]
+  receivables       Receivable[]
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 }
@@ -252,6 +256,8 @@ model Supplier {
   contactName       String?        // Contato principal
   notes             String?        // Observações
   status            SupplierStatus @default(ACTIVE)
+  payables          Payable[]
+  materialEntries   MaterialEntry[]
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 }
@@ -411,6 +417,7 @@ model Order {
   items            OrderItem[]
   productionOrders ProductionOrder[]
   deliveries       Delivery[]
+  receivables      Receivable[]
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
 }
@@ -508,4 +515,100 @@ model DeliveryItem {
   quantityPieces Int       // Quantidade em peças
   notes          String?
   createdAt      DateTime  @default(now())
+}
+
+// ===== MÓDULO FINANCEIRO =====
+
+enum ReceivableStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum PayableStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum PayableCategory {
+  RAW_MATERIAL  // Matéria-Prima
+  ENERGY        // Energia
+  MAINTENANCE   // Manutenção
+  PAYROLL       // Folha de Pagamento
+  TAXES         // Impostos
+  OTHER         // Outros
+}
+
+// Conta a receber
+model Receivable {
+  id            String            @id @default(cuid())
+  number        Int               @unique // Sequencial (REC-0001)
+  orderId       String?
+  order         Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  customerId    String
+  customer      Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  description   String?
+  invoiceNumber String?           // Número da NF
+  issueDate     DateTime          // Data de emissão
+  dueDate       DateTime          // Data de vencimento
+  totalAmount   Float             // Valor total
+  paidAmount    Float             @default(0) // Valor já pago
+  status        ReceivableStatus  @default(PENDING)
+  notes         String?
+  payments      ReceivablePayment[]
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+}
+
+// Pagamento de conta a receber
+model ReceivablePayment {
+  id            String     @id @default(cuid())
+  receivableId  String
+  receivable    Receivable @relation(fields: [receivableId], references: [id], onDelete: Cascade)
+  paymentDate   DateTime
+  amount        Float
+  paymentMethod String     // Boleto, PIX, Transferência, Cheque, Dinheiro
+  reference     String?    // Nº boleto/comprovante
+  notes         String?
+  createdAt     DateTime   @default(now())
+}
+
+// Conta a pagar
+model Payable {
+  id              String          @id @default(cuid())
+  number          Int             @unique // Sequencial (PAG-0001)
+  supplierId      String?
+  supplier        Supplier?       @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  materialEntryId String?         @unique
+  materialEntry   MaterialEntry?  @relation(fields: [materialEntryId], references: [id], onDelete: SetNull)
+  description     String?
+  invoiceNumber   String?         // Número da NF
+  issueDate       DateTime        // Data de emissão
+  dueDate         DateTime        // Data de vencimento
+  totalAmount     Float           // Valor total
+  paidAmount      Float           @default(0) // Valor já pago
+  category        PayableCategory // Categoria da despesa
+  status          PayableStatus   @default(PENDING)
+  notes           String?
+  payments        PayablePayment[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+// Pagamento de conta a pagar
+model PayablePayment {
+  id            String   @id @default(cuid())
+  payableId     String
+  payable       Payable  @relation(fields: [payableId], references: [id], onDelete: Cascade)
+  paymentDate   DateTime
+  amount        Float
+  paymentMethod String   // Boleto, PIX, Transferência, Cheque, Dinheiro
+  reference     String?  // Nº boleto/comprovante
+  notes         String?
+  createdAt     DateTime @default(now())
 }

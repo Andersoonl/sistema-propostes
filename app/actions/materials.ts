@@ -11,6 +11,7 @@ interface CreateMaterialEntryInput {
   quantity: number
   unitPrice: number
   supplier?: string
+  supplierId?: string
   invoiceNumber?: string
   notes?: string
 }
@@ -23,6 +24,7 @@ export async function createMaterialEntry(input: CreateMaterialEntryInput) {
       quantity: input.quantity,
       unitPrice: input.unitPrice,
       supplier: input.supplier,
+      supplierId: input.supplierId || null,
       invoiceNumber: input.invoiceNumber,
       notes: input.notes,
     },
@@ -49,6 +51,7 @@ export async function getMaterialEntries(filters?: {
     },
     include: {
       ingredient: true,
+      supplierRef: { select: { id: true, companyName: true, tradeName: true } },
     },
     orderBy: { date: 'desc' },
   })

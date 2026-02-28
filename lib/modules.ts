@@ -63,7 +63,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
     id: 'financeiro',
     label: 'Financeiro',
     icon: '💰',
-    enabledByDefault: false,
+    enabledByDefault: true,
     pages: [
       { href: '/financeiro/receber', label: 'Contas a Receber' },
       { href: '/financeiro/pagar', label: 'Contas a Pagar' },

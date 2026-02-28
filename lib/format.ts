@@ -53,3 +53,13 @@ export function fmtProductionOrderNumber(n: number): string {
 export function fmtDeliveryNumber(n: number): string {
   return `ENT-${String(n).padStart(4, '0')}`
 }
+
+/** Formata número de conta a receber (ex: REC-0001) */
+export function fmtReceivableNumber(n: number): string {
+  return `REC-${String(n).padStart(4, '0')}`
+}
+
+/** Formata número de conta a pagar (ex: PAG-0001) */
+export function fmtPayableNumber(n: number): string {
+  return `PAG-${String(n).padStart(4, '0')}`
+}
