@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { fmtInt, fmtMoney } from '@/lib/format'
-import { createProduct, deleteProduct } from '@/app/actions/production'
+import { fmtInt, fmtDec, fmtMoney } from '@/lib/format'
+import { createProduct, deleteProduct, updateProductPrice } from '@/app/actions/production'
 import {
   createIngredient,
   updateIngredient,
@@ -48,6 +48,8 @@ interface Product {
   name: string
   category: string | null
   subcategory: string | null
+  basePrice: number | null
+  basePriceUnit: string | null
   costRecipe: CostRecipe | null
 }
 
@@ -69,10 +71,15 @@ export function ProdutosClient({ products, ingredients }: Props) {
   const [newProductName, setNewProductName] = useState('')
   const [newProductCategory, setNewProductCategory] = useState('')
   const [newProductSubcategory, setNewProductSubcategory] = useState('')
+  const [newProductBasePrice, setNewProductBasePrice] = useState<number | ''>('')
+  const [newProductBasePriceUnit, setNewProductBasePriceUnit] = useState('M2')
   const [filterCategory, setFilterCategory] = useState('')
   const [filterSubcategory, setFilterSubcategory] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [editingPriceId, setEditingPriceId] = useState<string | null>(null)
+  const [editPrice, setEditPrice] = useState<number | ''>('')
+  const [editPriceUnit, setEditPriceUnit] = useState('M2')
 
   // Filtrar produtos
   const filteredProducts = products.filter((p) => {
@@ -96,11 +103,15 @@ export function ProdutosClient({ products, ingredients }: Props) {
       await createProduct(
         newProductName.trim(),
         newProductCategory || undefined,
-        newProductSubcategory || undefined
+        newProductSubcategory || undefined,
+        newProductBasePrice || undefined,
+        newProductBasePrice ? newProductBasePriceUnit : undefined
       )
       setNewProductName('')
       setNewProductCategory('')
       setNewProductSubcategory('')
+      setNewProductBasePrice('')
+      setNewProductBasePriceUnit('M2')
       setShowNewProductForm(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao criar produto')
@@ -119,6 +130,28 @@ export function ProdutosClient({ products, ingredients }: Props) {
       await deleteProduct(id)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao excluir produto')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleStartEditPrice = (product: Product) => {
+    setEditingPriceId(product.id)
+    setEditPrice(product.basePrice ?? '')
+    setEditPriceUnit(product.basePriceUnit || 'M2')
+  }
+
+  const handleSavePrice = async (id: string) => {
+    setLoading(true)
+    try {
+      await updateProductPrice(
+        id,
+        editPrice === '' ? null : Number(editPrice),
+        editPrice === '' ? null : editPriceUnit
+      )
+      setEditingPriceId(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao salvar preço')
     } finally {
       setLoading(false)
     }
@@ -254,6 +287,31 @@ export function ProdutosClient({ products, ingredients }: Props) {
                 />
               </div>
             </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Preço Base (R$)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={newProductBasePrice}
+                  onChange={(e) => setNewProductBasePrice(e.target.value ? parseFloat(e.target.value) : '')}
+                  placeholder="Opcional — preço sugerido"
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-[#3bbfb5] focus:ring-[#3bbfb5]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Unidade do Preço</label>
+                <select
+                  value={newProductBasePriceUnit}
+                  onChange={(e) => setNewProductBasePriceUnit(e.target.value)}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-[#3bbfb5] focus:ring-[#3bbfb5]"
+                >
+                  <option value="M2">por m²</option>
+                  <option value="PIECES">por peça</option>
+                </select>
+              </div>
+            </div>
             <div className="flex gap-3 justify-end">
               <button
                 type="button"
@@ -262,6 +320,8 @@ export function ProdutosClient({ products, ingredients }: Props) {
                   setNewProductName('')
                   setNewProductCategory('')
                   setNewProductSubcategory('')
+                  setNewProductBasePrice('')
+                  setNewProductBasePriceUnit('M2')
                 }}
                 className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
               >
@@ -284,6 +344,9 @@ export function ProdutosClient({ products, ingredients }: Props) {
         {filteredProducts.map((product) => {
           const recipe = product.costRecipe
           const costs = recipe ? calculateCosts(recipe) : null
+          // Receita completa: tem piecesPerCycle > 1 ou items com ingredientes
+          const isRecipeComplete = recipe && (recipe.piecesPerCycle > 1 || recipe.items.length > 0)
+          const hasPalletInfo = recipe && (recipe.piecesPerPallet || recipe.m2PerPallet)
 
           return (
             <div
@@ -299,9 +362,13 @@ export function ProdutosClient({ products, ingredients }: Props) {
                     )}
                   </div>
                   <div className="flex items-center gap-1">
-                    {recipe ? (
+                    {isRecipeComplete ? (
                       <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                         Receita OK
+                      </span>
+                    ) : hasPalletInfo ? (
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        Pallet OK
                       </span>
                     ) : (
                       <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
@@ -311,20 +378,91 @@ export function ProdutosClient({ products, ingredients }: Props) {
                   </div>
                 </div>
 
-                {recipe && costs && (
+                {/* Preço Base */}
+                <div className="mt-3">
+                  {editingPriceId === product.id ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={editPrice}
+                        onChange={(e) => setEditPrice(e.target.value ? parseFloat(e.target.value) : '')}
+                        className="w-24 text-sm rounded-md border-gray-300 shadow-sm focus:border-[#3bbfb5] focus:ring-[#3bbfb5]"
+                        placeholder="R$"
+                        autoFocus
+                      />
+                      <select
+                        value={editPriceUnit}
+                        onChange={(e) => setEditPriceUnit(e.target.value)}
+                        className="text-sm rounded-md border-gray-300 shadow-sm focus:border-[#3bbfb5] focus:ring-[#3bbfb5]"
+                      >
+                        <option value="M2">/m²</option>
+                        <option value="PIECES">/pç</option>
+                      </select>
+                      <button
+                        onClick={() => handleSavePrice(product.id)}
+                        disabled={loading}
+                        className="text-xs text-green-600 hover:text-green-800 font-medium"
+                      >
+                        Salvar
+                      </button>
+                      <button
+                        onClick={() => setEditingPriceId(null)}
+                        className="text-xs text-gray-500 hover:text-gray-700"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      {product.basePrice ? (
+                        <span className="text-sm font-medium text-[#2d3e7e]">
+                          {fmtMoney(product.basePrice)}/{product.basePriceUnit === 'PIECES' ? 'pç' : 'm²'}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">Sem preço base</span>
+                      )}
+                      <button
+                        onClick={() => handleStartEditPrice(product)}
+                        className="text-xs text-gray-400 hover:text-[#3bbfb5]"
+                      >
+                        {product.basePrice ? 'editar' : 'definir'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {recipe && (
                   <div className="mt-3 space-y-1 text-sm text-gray-600">
-                    <p>
-                      <span className="font-medium">Custo/peça:</span>{' '}
-                      {fmtMoney(costs.costPerPiece, 4)}
-                    </p>
-                    <p>
-                      <span className="font-medium">Custo/m²:</span>{' '}
-                      {fmtMoney(costs.costPerM2)}
-                    </p>
-                    <p>
-                      <span className="font-medium">Peças/traço:</span>{' '}
-                      {fmtInt(costs.piecesPerBatch)}
-                    </p>
+                    {recipe.piecesPerPallet && (
+                      <p>
+                        <span className="font-medium">Peças/Pallet:</span>{' '}
+                        {fmtInt(recipe.piecesPerPallet)}
+                      </p>
+                    )}
+                    {recipe.m2PerPallet && (
+                      <p>
+                        <span className="font-medium">m²/Pallet:</span>{' '}
+                        {fmtDec(recipe.m2PerPallet, 2)}
+                      </p>
+                    )}
+                    {isRecipeComplete && costs && (
+                      <>
+                        <p>
+                          <span className="font-medium">Custo/peça:</span>{' '}
+                          {fmtMoney(costs.costPerPiece, 4)}
+                        </p>
+                        <p>
+                          <span className="font-medium">Custo/m²:</span>{' '}
+                          {fmtMoney(costs.costPerM2)}
+                        </p>
+                        <p>
+                          <span className="font-medium">Peças/traço:</span>{' '}
+                          {fmtInt(costs.piecesPerBatch)}
+                        </p>
+                      </>
+                    )}
                   </div>
                 )}
 

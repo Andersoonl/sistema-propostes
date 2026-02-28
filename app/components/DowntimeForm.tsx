@@ -39,7 +39,7 @@ export function DowntimeForm({ productionDayId, machineId, existingEvents, onSav
 
   useEffect(() => {
     loadReasons()
-  }, [machineId])
+  }, [machineId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadReasons = async () => {
     const data = await getReasonHierarchy(machineId)

@@ -8,21 +8,11 @@ import {
   getProductStock,
   getMovements,
 } from '@/app/actions/inventory'
+import type { ProductStockItem } from '@/app/actions/inventory'
 
 interface Product {
   id: string
   name: string
-}
-
-interface ProductStockItem {
-  productId: string
-  productName: string
-  totalIn: number
-  totalOut: number
-  balancePieces: number
-  balancePallets: number | null
-  balanceM2: number | null
-  lastMovementDate: string | null
 }
 
 interface InventoryMovement {
@@ -35,6 +25,7 @@ interface InventoryMovement {
   areaM2: number | null
   notes: string | null
   productionDayId: string | null
+  palletizationId: string | null
   product: Product
 }
 
@@ -121,10 +112,11 @@ export function EstoqueClient({
     }
   }
 
-  const totalPallets = stock.reduce((sum, item) => sum + (item.balancePallets || 0), 0)
-  const totalM2 = stock.reduce((sum, item) => sum + (item.balanceM2 || 0), 0)
-  const totalPieces = stock.reduce((sum, item) => sum + item.balancePieces, 0)
-  const productsInStock = stock.filter((s) => s.balancePieces > 0).length
+  const totalCuring = stock.reduce((sum, item) => sum + item.curingPieces, 0)
+  const totalAvailable = stock.reduce((sum, item) => sum + item.availablePieces, 0)
+  const totalLoose = stock.reduce((sum, item) => sum + item.loosePieces, 0)
+  const totalPallets = stock.reduce((sum, item) => sum + (item.availablePallets || 0), 0)
+  const totalM2 = stock.reduce((sum, item) => sum + (item.availableM2 || 0), 0)
 
   return (
     <div>
@@ -139,18 +131,25 @@ export function EstoqueClient({
       </div>
 
       {/* Cards resumo */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         <div className="bg-white rounded-lg shadow p-4">
-          <div className="text-sm text-gray-500">Produtos no Pátio</div>
-          <div className="text-3xl font-bold text-gray-900">{productsInStock}</div>
+          <div className="text-sm text-gray-500">Em Cura</div>
+          <div className="text-3xl font-bold text-amber-600">{fmtInt(totalCuring)}</div>
+          <div className="text-xs text-gray-400">peças</div>
         </div>
         <div className="bg-white rounded-lg shadow p-4">
-          <div className="text-sm text-gray-500">Total Peças</div>
-          <div className="text-3xl font-bold text-indigo-600">{fmtInt(totalPieces)}</div>
+          <div className="text-sm text-gray-500">Disponível</div>
+          <div className="text-3xl font-bold text-teal-600">{fmtInt(totalAvailable)}</div>
+          <div className="text-xs text-gray-400">peças</div>
+        </div>
+        <div className="bg-white rounded-lg shadow p-4">
+          <div className="text-sm text-gray-500">Peças Soltas</div>
+          <div className="text-3xl font-bold text-purple-600">{fmtInt(totalLoose)}</div>
+          <div className="text-xs text-gray-400">acumulado</div>
         </div>
         <div className="bg-white rounded-lg shadow p-4">
           <div className="text-sm text-gray-500">Total Pallets</div>
-          <div className="text-3xl font-bold text-purple-600">
+          <div className="text-3xl font-bold text-indigo-600">
             {fmtMax(totalPallets, 1)}
           </div>
         </div>
@@ -251,16 +250,16 @@ export function EstoqueClient({
       {activeTab === 'stock' && (
         <div className="bg-white rounded-lg shadow overflow-hidden">
           {stock.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">Nenhum produto em estoque. Lance produção para gerar entradas.</div>
+            <div className="p-8 text-center text-gray-500">Nenhum produto em estoque. Lance produção e paletize para gerar entradas.</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Produto</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Entrada</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Saída</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Saldo (pçs)</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Em Cura (pçs)</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Disponível (pçs)</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Soltas</th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Pallets</th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">m²</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Última Mov.</th>
@@ -268,24 +267,32 @@ export function EstoqueClient({
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {stock.map((item) => (
-                    <tr key={item.productId} className={item.balancePieces <= 0 ? 'bg-gray-50 text-gray-400' : ''}>
+                    <tr key={item.productId} className={item.availablePieces <= 0 && item.curingPieces <= 0 ? 'bg-gray-50 text-gray-400' : ''}>
                       <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{item.productName}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-green-600">
-                        +{fmtInt(item.totalIn)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-red-600">
-                        -{fmtInt(item.totalOut)}
+                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                        {item.curingPieces > 0 ? (
+                          <span className="text-amber-600 font-semibold">{fmtInt(item.curingPieces)}</span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
                       </td>
                       <td className={`px-6 py-4 whitespace-nowrap text-right font-bold ${
-                        item.balancePieces > 0 ? 'text-indigo-600' : 'text-gray-400'
+                        item.availablePieces > 0 ? 'text-teal-600' : 'text-gray-400'
                       }`}>
-                        {fmtInt(item.balancePieces)}
+                        {fmtInt(item.availablePieces)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right font-semibold text-purple-600">
-                        {item.balancePallets !== null ? fmtMax(item.balancePallets, 1) : '-'}
+                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                        {item.loosePieces > 0 ? (
+                          <span className="text-purple-600 font-semibold">{fmtInt(item.loosePieces)}</span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right font-semibold text-indigo-600">
+                        {item.availablePallets !== null ? fmtMax(item.availablePallets, 1) : '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right font-semibold text-teal-600">
-                        {item.balanceM2 !== null ? fmtMax(item.balanceM2, 1) : '-'}
+                        {item.availableM2 !== null ? fmtMax(item.availableM2, 1) : '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-gray-500">
                         {item.lastMovementDate
@@ -323,7 +330,8 @@ export function EstoqueClient({
                 <tbody className="bg-white divide-y divide-gray-200">
                   {movements.map((mov) => {
                     const movDate = new Date(mov.date)
-                    const isAuto = mov.type === 'IN' && mov.productionDayId
+                    const isAuto = mov.type === 'IN' && (mov.productionDayId || mov.palletizationId)
+                    const autoLabel = mov.palletizationId ? '(palet.)' : '(legado)'
                     return (
                       <tr key={mov.id}>
                         <td className="px-6 py-4 whitespace-nowrap text-gray-900">
@@ -337,8 +345,8 @@ export function EstoqueClient({
                           }`}>
                             {mov.type === 'IN' ? 'Entrada' : 'Saída'}
                             {isAuto && (
-                              <span className="ml-1 text-green-500" title="Gerado automaticamente pela produção">
-                                (auto)
+                              <span className="ml-1 text-green-500" title={mov.palletizationId ? 'Gerado pela paletização' : 'Gerado automaticamente pela produção (legado)'}>
+                                {autoLabel}
                               </span>
                             )}
                           </span>

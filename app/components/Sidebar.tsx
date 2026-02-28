@@ -14,14 +14,19 @@ export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false)
 
   // Auto-expand the section that contains the current page
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const active = MODULE_SECTIONS.find((s) =>
       s.pages.some((p) => pathname === p.href || pathname.startsWith(p.href + '/'))
     )
     if (active) {
-      setOpenSections((prev) => ({ ...prev, [active.id]: true }))
+      setOpenSections((prev) => {
+        if (prev[active.id]) return prev
+        return { ...prev, [active.id]: true }
+      })
     }
   }, [pathname])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   function toggleOpen(sectionId: string) {
     if (!isEnabled(sectionId)) return

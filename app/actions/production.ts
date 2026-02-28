@@ -151,41 +151,12 @@ export async function saveProductionDay(input: SaveProductionDayInput) {
     })
   }
 
-  // Criar movimentações de estoque (Fase 3 - Estoque PA)
-  // Deletar movimentações anteriores deste dia de produção para evitar duplicação
-  await prisma.inventoryMovement.deleteMany({
-    where: { productionDayId: productionDay.id },
-  })
-
-  for (const item of input.items) {
-    const recipe = recipeMap.get(item.productId)
-    const pieces = recipe ? item.cycles * recipe.piecesPerCycle : item.cycles
-    const areaM2 = pieces && recipe?.piecesPerM2 ? pieces / recipe.piecesPerM2 : null
-    let invPallets: number | null = null
-    if (recipe?.m2PerPallet && areaM2) {
-      invPallets = areaM2 / recipe.m2PerPallet
-    } else if (recipe?.piecesPerPallet && pieces) {
-      invPallets = pieces / recipe.piecesPerPallet
-    }
-
-    if (pieces > 0) {
-      await prisma.inventoryMovement.create({
-        data: {
-          productId: item.productId,
-          date: startOfDay,
-          type: 'IN',
-          quantityPieces: pieces,
-          quantityPallets: invPallets,
-          areaM2,
-          productionDayId: productionDay.id,
-          notes: `Produção automática - ${item.cycles} ciclos`,
-        },
-      })
-    }
-  }
+  // Produção não gera mais entrada automática no estoque.
+  // O estoque é atualizado via módulo de Paletização (contagem real pós-cura).
 
   revalidatePath('/dia')
   revalidatePath('/dash/producao')
+  revalidatePath('/paletizacao')
   revalidatePath('/estoque')
 
   return productionDay
@@ -242,9 +213,15 @@ export async function deleteDowntimeEvent(id: string) {
   revalidatePath('/dash/producao')
 }
 
-export async function createProduct(name: string, category?: string, subcategory?: string) {
+export async function createProduct(name: string, category?: string, subcategory?: string, basePrice?: number, basePriceUnit?: string) {
   const product = await prisma.product.create({
-    data: { name, category, subcategory },
+    data: {
+      name,
+      category,
+      subcategory,
+      basePrice: basePrice ?? null,
+      basePriceUnit: (basePriceUnit as 'PIECES' | 'M2' | null) ?? null,
+    },
   })
 
   revalidatePath('/dia')
@@ -253,10 +230,31 @@ export async function createProduct(name: string, category?: string, subcategory
   return product
 }
 
-export async function deleteProduct(id: string) {
-  await prisma.product.delete({
+export async function updateProductPrice(id: string, basePrice: number | null, basePriceUnit: string | null) {
+  await prisma.product.update({
     where: { id },
+    data: {
+      basePrice,
+      basePriceUnit: basePriceUnit as 'PIECES' | 'M2' | null,
+    },
   })
+
+  revalidatePath('/produtos')
+  revalidatePath('/comercial/orcamentos')
+}
+
+export async function deleteProduct(id: string) {
+  try {
+    await prisma.product.delete({
+      where: { id },
+    })
+  } catch (err: unknown) {
+    const prismaErr = err as { code?: string; message?: string }
+    if (prismaErr?.code === 'P2003' || prismaErr?.message?.includes('Foreign key constraint')) {
+      throw new Error('Este produto está em orçamentos ou pedidos e não pode ser excluído.')
+    }
+    throw err
+  }
 
   revalidatePath('/dia')
   revalidatePath('/produtos')

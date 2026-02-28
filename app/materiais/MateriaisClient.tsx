@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { fmtDec, fmtMax, fmtMoney } from '@/lib/format'
+import { fmtMax, fmtMoney } from '@/lib/format'
 import { MonthPicker } from '@/app/components/DatePicker'
 import {
   createMaterialEntry,

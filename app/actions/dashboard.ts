@@ -499,7 +499,17 @@ interface ProductionChainSummary {
     m2: number
   }[]
 
+  // Paletização
+  palletizedPieces: number
+  palletizedPallets: number
+  palletizedM2: number
+  lossPieces: number
+  lossPct: number
+
   // Estoque PA
+  stockAvailablePieces: number
+  stockCuringPieces: number
+  stockLoosePieces: number
   stockPieces: number
   stockPallets: number
   stockM2: number
@@ -581,6 +591,26 @@ export async function getProductionChainSummary(year: number, month: number): Pr
     }
   }
 
+  // Paletização do mês
+  const palletizations = await prisma.palletization.findMany({
+    where: {
+      palletizedDate: { gte: startDate, lte: endDate },
+    },
+  })
+
+  let palletizedPieces = 0
+  let palletizedPallets = 0
+  let lossPiecesTotal = 0
+
+  for (const p of palletizations) {
+    palletizedPieces += p.realPieces
+    palletizedPallets += p.completePallets
+    lossPiecesTotal += p.lossPieces
+  }
+
+  const palletizedTheoreticalTotal = palletizations.reduce((sum, p) => sum + p.theoreticalPieces + p.loosePiecesBefore, 0)
+  const lossPct = palletizedTheoreticalTotal > 0 ? (lossPiecesTotal / palletizedTheoreticalTotal) * 100 : 0
+
   // Estoque atual
   const allMovements = await prisma.inventoryMovement.findMany()
   let stockPieces = 0
@@ -592,6 +622,72 @@ export async function getProductionChainSummary(year: number, month: number): Pr
     stockPieces += sign * mov.quantityPieces
     stockPallets += sign * (mov.quantityPallets || 0)
     stockM2 += sign * (mov.areaM2 || 0)
+  }
+
+  // Peças em cura (produzidas mas não paletizadas)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const existingPalletizations = await prisma.palletization.findMany({
+    select: { productId: true, productionDate: true },
+  })
+  const palletizedSet = new Set(
+    existingPalletizations.map(
+      (p) => `${p.productId}|${p.productionDate.toISOString().split('T')[0]}`
+    )
+  )
+
+  const legacyMovements = await prisma.inventoryMovement.findMany({
+    where: { type: 'IN', productionDayId: { not: null } },
+    select: { productionDayId: true },
+  })
+  const legacyDayIds = new Set(legacyMovements.map((m) => m.productionDayId!))
+
+  const curingItems = await prisma.productionItem.findMany({
+    where: {
+      cycles: { gt: 0 },
+      productionDay: { date: { lt: today } },
+    },
+    include: { productionDay: true },
+  })
+
+  // Buscar receitas para recalcular peças quando pieces é NULL
+  const curingProductIds = [...new Set(curingItems.map((i) => i.productId))]
+  const curingRecipes = await prisma.costRecipe.findMany({
+    where: { productId: { in: curingProductIds } },
+    select: { productId: true, piecesPerCycle: true },
+  })
+  const curingRecipeMap = new Map(curingRecipes.map((r) => [r.productId, r]))
+
+  let stockCuringPieces = 0
+  for (const item of curingItems) {
+    const dateStr = item.productionDay.date.toISOString().split('T')[0]
+    const key = `${item.productId}|${dateStr}`
+    if (!palletizedSet.has(key) && !legacyDayIds.has(item.productionDayId)) {
+      const curingRecipe = curingRecipeMap.get(item.productId)
+      const pieces = item.pieces ?? (curingRecipe ? item.cycles * curingRecipe.piecesPerCycle : item.cycles)
+      stockCuringPieces += pieces
+    }
+  }
+
+  // Peças soltas
+  const looseBalances = await prisma.loosePiecesBalance.findMany()
+  const stockLoosePieces = looseBalances.reduce((sum, b) => sum + b.pieces, 0)
+
+  // Calcular m² paletizado
+  const palletizedProductIds = [...new Set(palletizations.map((p) => p.productId))]
+  const palletRecipes = await prisma.costRecipe.findMany({
+    where: { productId: { in: palletizedProductIds } },
+    select: { productId: true, piecesPerM2: true },
+  })
+  const palletRecipeMap = new Map(palletRecipes.map((r) => [r.productId, r]))
+
+  let palletizedM2 = 0
+  for (const p of palletizations) {
+    const recipe = palletRecipeMap.get(p.productId)
+    if (recipe?.piecesPerM2) {
+      palletizedM2 += p.realPieces / recipe.piecesPerM2
+    }
   }
 
   const materialConsumption = Array.from(materialMap.values())
@@ -615,6 +711,14 @@ export async function getProductionChainSummary(year: number, month: number): Pr
       pallets: Math.round(m.pallets * 10) / 10,
       m2: Math.round(m.m2 * 10) / 10,
     })),
+    palletizedPieces,
+    palletizedPallets,
+    palletizedM2: Math.round(palletizedM2 * 10) / 10,
+    lossPieces: lossPiecesTotal,
+    lossPct: Math.round(lossPct * 10) / 10,
+    stockAvailablePieces: stockPieces,
+    stockCuringPieces,
+    stockLoosePieces,
     stockPieces,
     stockPallets: Math.round(stockPallets * 10) / 10,
     stockM2: Math.round(stockM2 * 10) / 10,

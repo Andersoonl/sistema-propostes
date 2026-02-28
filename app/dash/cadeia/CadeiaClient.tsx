@@ -29,6 +29,14 @@ interface ProductionChainSummary {
   totalPallets: number
   totalM2: number
   byMachine: MachineBreakdown[]
+  palletizedPieces: number
+  palletizedPallets: number
+  palletizedM2: number
+  lossPieces: number
+  lossPct: number
+  stockAvailablePieces: number
+  stockCuringPieces: number
+  stockLoosePieces: number
   stockPieces: number
   stockPallets: number
   stockM2: number
@@ -65,6 +73,8 @@ export function CadeiaClient({ initialYear, initialMonth, initialData }: CadeiaC
     setLoading(false)
   }
 
+  const lossColor = data.lossPct < 3 ? 'text-green-600' : data.lossPct < 5 ? 'text-amber-600' : 'text-red-600'
+
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
@@ -79,9 +89,9 @@ export function CadeiaClient({ initialYear, initialMonth, initialData }: CadeiaC
           {/* Fluxo Visual */}
           <div className="bg-white rounded-lg shadow p-6 mb-6">
             <h2 className="text-lg font-semibold mb-4">Fluxo de Produção do Mês</h2>
-            <div className="grid grid-cols-11 gap-2 items-center">
+            <div className="grid grid-cols-[2fr_auto_1fr_auto_1fr_auto_1fr_auto_1.5fr_auto_2fr] gap-2 items-center">
               {/* MP */}
-              <div className="col-span-2 bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
                 <div className="text-xs font-medium text-amber-600 uppercase tracking-wide mb-1">Matéria Prima</div>
                 <div className="text-xl font-bold text-amber-700">
                   {fmtMoney(data.totalMaterialCost, 0)}
@@ -117,25 +127,52 @@ export function CadeiaClient({ initialYear, initialMonth, initialData }: CadeiaC
 
               <FlowArrow />
 
-              {/* Pallets + m² */}
-              <div className="col-span-2 bg-teal-50 border border-teal-200 rounded-lg p-4 text-center">
-                <div className="text-xs font-medium text-teal-600 uppercase tracking-wide mb-1">Resultado</div>
+              {/* Paletização */}
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-center">
+                <div className="text-xs font-medium text-orange-600 uppercase tracking-wide mb-1">Paletização</div>
                 <div className="flex justify-around">
                   <div>
-                    <div className="text-lg font-bold text-teal-700">{fmtInt(data.totalPallets)}</div>
+                    <div className="text-lg font-bold text-orange-700">{fmtInt(data.palletizedPallets)}</div>
+                    <div className="text-xs text-orange-500">pallets</div>
+                  </div>
+                  <div>
+                    <div className={`text-lg font-bold ${lossColor}`}>{fmtDec(data.lossPct, 1)}%</div>
+                    <div className="text-xs text-orange-500">perda</div>
+                  </div>
+                </div>
+              </div>
+
+              <FlowArrow />
+
+              {/* Estoque */}
+              <div className="bg-teal-50 border border-teal-200 rounded-lg p-4 text-center">
+                <div className="text-xs font-medium text-teal-600 uppercase tracking-wide mb-1">Estoque</div>
+                <div className="flex justify-around">
+                  <div>
+                    <div className="text-lg font-bold text-teal-700">{fmtInt(data.stockPallets)}</div>
                     <div className="text-xs text-teal-500">pallets</div>
                   </div>
                   <div>
-                    <div className="text-lg font-bold text-teal-700">{fmtInt(data.totalM2)}</div>
+                    <div className="text-lg font-bold text-teal-700">{fmtInt(data.stockM2)}</div>
                     <div className="text-xs text-teal-500">m²</div>
                   </div>
                 </div>
+                {(data.stockCuringPieces > 0 || data.stockLoosePieces > 0) && (
+                  <div className="mt-2 flex justify-around text-xs">
+                    {data.stockCuringPieces > 0 && (
+                      <span className="text-amber-600">{fmtInt(data.stockCuringPieces)} em cura</span>
+                    )}
+                    {data.stockLoosePieces > 0 && (
+                      <span className="text-purple-600">{fmtInt(data.stockLoosePieces)} soltas</span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
           {/* KPIs */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
             <div className="bg-white rounded-lg shadow p-4">
               <div className="text-sm text-gray-500">Custo MP Total</div>
               <div className="text-2xl font-bold text-amber-600">
@@ -158,8 +195,15 @@ export function CadeiaClient({ initialYear, initialMonth, initialData }: CadeiaC
               <div className="text-xs text-gray-400 mt-1">{fmtInt(data.totalPallets)} pallets | {fmtInt(data.totalM2)} m²</div>
             </div>
             <div className="bg-white rounded-lg shadow p-4">
+              <div className="text-sm text-gray-500">Paletização</div>
+              <div className="text-2xl font-bold text-orange-600">{fmtInt(data.palletizedPallets)} pallets</div>
+              <div className="text-xs text-gray-400 mt-1">
+                Perda: <span className={lossColor}>{fmtInt(data.lossPieces)} pçs ({fmtDec(data.lossPct, 1)}%)</span>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg shadow p-4">
               <div className="text-sm text-gray-500">Estoque PA Atual</div>
-              <div className="text-2xl font-bold text-teal-600">{fmtInt(data.stockPieces)} pçs</div>
+              <div className="text-2xl font-bold text-teal-600">{fmtInt(data.stockAvailablePieces)} pçs</div>
               <div className="text-xs text-gray-400 mt-1">{fmtInt(data.stockPallets)} pallets | {fmtInt(data.stockM2)} m²</div>
             </div>
           </div>

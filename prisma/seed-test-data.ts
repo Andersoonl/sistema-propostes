@@ -73,7 +73,6 @@ async function main() {
   console.log('\n=== Buscando dados mestres ===')
 
   const machines = await prisma.machine.findMany()
-  const machineMap = new Map(machines.map(m => [m.name, m]))
   console.log(`  Máquinas: ${machines.map(m => m.name).join(', ')}`)
 
   const products = await prisma.product.findMany({
@@ -89,9 +88,6 @@ async function main() {
   const blocos = products.filter(p => p.category === 'BLOCO DE CONCRETO')
 
   // Products with recipes (for proper calculations)
-  const pisosComReceita = pisos.filter(p => p.costRecipe)
-  const blocosComReceita = blocos.filter(p => p.costRecipe)
-
   // Common products for each machine (realistic distribution)
   // VP1/VP2: mostly pisos (PAVER, UNISTEIN)
   const vp1Products = pisos.filter(p =>

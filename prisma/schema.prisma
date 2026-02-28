@@ -42,6 +42,14 @@ model Product {
   productionItems    ProductionItem[]
   costRecipe         CostRecipe?
   inventoryMovements InventoryMovement[]
+  palletizations     Palletization[]
+  loosePiecesBalance LoosePiecesBalance?
+  basePrice          Float?              // Preço base de venda (R$)
+  basePriceUnit      QuantityUnit?       // Unidade do preço base (PIECES ou M2)
+  quoteItems         QuoteItem[]
+  orderItems         OrderItem[]
+  productionOrders   ProductionOrder[]
+  deliveryItems      DeliveryItem[]
   createdAt          DateTime            @default(now())
 }
 
@@ -212,6 +220,8 @@ model Customer {
   contactName       String?        // Contato principal
   notes             String?        // Observações
   status            CustomerStatus @default(ACTIVE)
+  quotes            Quote[]
+  orders            Order[]
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 }
@@ -252,11 +262,250 @@ model InventoryMovement {
   productId       String
   product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   date            DateTime
-  type            String   // 'IN' (produção) ou 'OUT' (saída/venda)
+  type            String   // 'IN' (paletização ou legado) ou 'OUT' (saída/venda)
   quantityPieces  Int
   quantityPallets Float?
   areaM2          Float?
   notes           String?
-  productionDayId String?  // referência ao dia de produção (quando tipo IN automático)
+  productionDayId String?  // referência ao dia de produção (legado, antes da paletização)
+  palletizationId String?  // referência à paletização (quando entrada gerada pela paletização)
+  deliveryId      String?  // referência à entrega (quando saída gerada pela entrega)
   createdAt       DateTime @default(now())
+}
+
+// Confirmação de paletização (contagem real pós-cura)
+model Palletization {
+  id                String   @id @default(cuid())
+  productId         String
+  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productionDate    DateTime // dia em que foi produzido (D)
+  palletizedDate    DateTime // dia em que foi paletizado (D+1 útil ou posterior)
+
+  theoreticalPieces Int      // total teórico (soma dos ProductionItem do dia para este produto)
+  completePallets   Int      // input do operador: pallets completos
+  loosePiecesAfter  Int      // input do operador: peças soltas restantes
+  piecesPerPallet   Int      // snapshot da receita no momento da paletização
+
+  realPieces        Int      // calculado: completePallets × piecesPerPallet
+  lossPieces        Int      // calculado: theoreticalPieces + loosePiecesBefore - realPieces - loosePiecesAfter
+  loosePiecesBefore Int      // peças soltas acumuladas ANTES desta paletização
+
+  notes             String?
+  createdAt         DateTime @default(now())
+
+  @@unique([productId, productionDate])
+}
+
+// Saldo corrente de peças soltas por produto
+model LoosePiecesBalance {
+  id        String   @id @default(cuid())
+  productId String   @unique
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  pieces    Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+// ===== MÓDULO ORDENS DE PRODUÇÃO =====
+
+enum ProductionOrderStatus {
+  PENDING       // Aguardando produção
+  IN_PROGRESS   // Estoque parcial (0 < disponível < necessário)
+  COMPLETED     // Estoque >= necessário
+  CANCELLED     // Cancelada
+}
+
+model ProductionOrder {
+  id              String                @id @default(cuid())
+  number          Int                   @unique // Sequencial (OP-0001)
+  orderId         String
+  order           Order                 @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  orderItemId     String                @unique
+  orderItem       OrderItem             @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  productId       String
+  product         Product               @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantityPieces  Int                   // Quantidade total necessária (sempre em peças)
+  stockAtCreation Int                   // Snapshot: estoque disponível no momento da criação
+  toProducePieces Int                   // quantityPieces - stockAtCreation (o que falta produzir)
+  status          ProductionOrderStatus @default(PENDING)
+  notes           String?
+  completedAt     DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+}
+
+// ===== MÓDULO COMERCIAL =====
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum OrderStatus {
+  CONFIRMED
+  IN_PRODUCTION
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+enum QuantityUnit {
+  PIECES
+  M2
+}
+
+// Orçamento
+model Quote {
+  id               String      @id @default(cuid())
+  number           Int         @unique // Sequencial (exibido como ORC-0001)
+  customerId       String
+  customer         Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  date             DateTime    @default(now())
+  validUntil       DateTime
+  status           QuoteStatus @default(DRAFT)
+  projectName      String?     // Obra/projeto
+  paymentTerms     String?     // Prazo de pagamento (ex: 15 dias, 30/60/90)
+  paymentMethod    String?     // Forma de pagamento (Boleto, Transferência, PIX)
+  deliveryType     String?     // Tipo frete (CIF/FOB)
+  deliveryAddress  String?     // Endereço de entrega
+  deliverySchedule String?     // Programação entrega (Imediata, 5 dias, etc.)
+  notes            String?
+  totalAmount      Float       @default(0)
+  items            QuoteItem[]
+  orders           Order[]
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+}
+
+// Item do orçamento
+model QuoteItem {
+  id        String       @id @default(cuid())
+  quoteId   String
+  quote     Quote        @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity  Float
+  unit      QuantityUnit
+  unitPrice Float
+  discount  Float        @default(0) // Desconto em % (0-100)
+  subtotal  Float
+  createdAt DateTime     @default(now())
+}
+
+// Pedido
+model Order {
+  id           String      @id @default(cuid())
+  number       Int         @unique // Sequencial (exibido como PED-0001)
+  quoteId      String?     // null = pedido avulso
+  quote        Quote?      @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  customerId   String
+  customer     Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  orderDate    DateTime    @default(now())
+  deliveryDate DateTime?   // Previsão de entrega
+  status       OrderStatus @default(CONFIRMED)
+  paymentTerms String?
+  notes        String?
+  totalAmount  Float       @default(0)
+  items            OrderItem[]
+  productionOrders ProductionOrder[]
+  deliveries       Delivery[]
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+}
+
+// Item do pedido
+model OrderItem {
+  id              String           @id @default(cuid())
+  orderId         String
+  order           Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product          @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity        Float
+  unit            QuantityUnit
+  unitPrice       Float
+  discount        Float            @default(0) // Desconto em % (0-100)
+  subtotal        Float
+  productionOrder ProductionOrder?
+  deliveryItems   DeliveryItem[]
+  createdAt       DateTime         @default(now())
+}
+
+// ===== MÓDULO LOGÍSTICA =====
+
+enum VehicleStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum DriverStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum DeliveryStatus {
+  LOADING     // Carregando
+  IN_TRANSIT  // Em trânsito
+  DELIVERED   // Entregue
+  CANCELLED   // Cancelada
+}
+
+// Veículos
+model Vehicle {
+  id          String        @id @default(cuid())
+  plate       String        @unique // Placa (ABC-1234 ou ABC1D23)
+  description String?       // Descrição (ex: Caminhão Truck)
+  capacity    String?       // Capacidade (ex: 12 toneladas)
+  status      VehicleStatus @default(ACTIVE)
+  deliveries  Delivery[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+// Motoristas
+model Driver {
+  id         String       @id @default(cuid())
+  name       String
+  document   String?      // CPF
+  phone      String?
+  license    String?      // CNH
+  status     DriverStatus @default(ACTIVE)
+  deliveries Delivery[]
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+}
+
+// Entrega
+model Delivery {
+  id              String         @id @default(cuid())
+  number          Int            @unique // Sequencial (ENT-0001)
+  orderId         String
+  order           Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  vehicleId       String?
+  vehicle         Vehicle?       @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  driverId        String?
+  driver          Driver?        @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  loadingDate     DateTime       // Data de carregamento
+  deliveryDate    DateTime?      // Data da entrega (preenchida ao entregar)
+  deliveryAddress String?        // Endereço de entrega
+  status          DeliveryStatus @default(LOADING)
+  notes           String?
+  items           DeliveryItem[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+// Item da entrega
+model DeliveryItem {
+  id             String    @id @default(cuid())
+  deliveryId     String
+  delivery       Delivery  @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  orderItemId    String
+  orderItem      OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  productId      String
+  product        Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantityPieces Int       // Quantidade em peças
+  notes          String?
+  createdAt      DateTime  @default(now())
 }

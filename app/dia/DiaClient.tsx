@@ -42,7 +42,7 @@ export function DiaClient({ machines, products }: DiaClientProps) {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [productionData, setProductionData] = useState<Record<string, ProductionDayWithRelations | null>>({})
   const [machineShifts, setMachineShifts] = useState<Record<string, EffectiveShift>>({})
-  const [shiftOverrides, setShiftOverrides] = useState<Record<string, ShiftOverride | null>>({})
+  const [, setShiftOverrides] = useState<Record<string, ShiftOverride | null>>({})
   const [loading, setLoading] = useState(true)
   const [editingShift, setEditingShift] = useState<string | null>(null)
   const [shiftForm, setShiftForm] = useState({ dayOfWeek: 0, startTime: '', endTime: '', breakMinutes: 0 })

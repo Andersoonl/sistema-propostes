@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { fmtInt, fmtDec, fmtMoney } from '@/lib/format'
+import { fmtInt, fmtMoney } from '@/lib/format'
 
 interface Ingredient {
   id: string
@@ -94,11 +94,13 @@ export function RecipeForm({ product, recipe, ingredients, onClose, onSave, onDe
   )
 
   // Inicializar itens com todos os ingredientes se não houver receita
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!recipe && ingredients.length > 0) {
       setRecipeItems(ingredients.map((ing) => ({ ingredientId: ing.id, quantity: 0 })))
     }
   }, [recipe, ingredients])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Cálculos
   const batchCost = recipeItems.reduce((sum, item) => {

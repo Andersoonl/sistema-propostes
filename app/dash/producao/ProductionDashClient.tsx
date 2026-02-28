@@ -100,15 +100,21 @@ const UNIT_CONFIG: Record<ChartUnit, { label: string; keys: { hzen: string; vp1:
   m2: { label: 'm²', keys: { hzen: 'HZENM2', vp1: 'VP1M2', vp2: 'VP2M2', total: 'totalM2' } },
 }
 
+interface TooltipPayloadEntry {
+  value: number
+  name: string
+  color: string
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CustomProductionTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload || payload.length === 0) return null
-  const values = payload.map((p: any) => p.value)
+  const values = payload.map((p: TooltipPayloadEntry) => p.value)
   const hasDuplicates = new Set(values).size < values.length
   return (
     <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-3 min-w-[140px]">
       <p className="font-semibold text-gray-700 mb-1.5 text-sm border-b pb-1.5">Dia {label}</p>
-      {payload.map((entry: any, index: number) => {
+      {payload.map((entry: TooltipPayloadEntry, index: number) => {
         const isDuplicate = hasDuplicates && values.filter((v: number) => v === entry.value).length > 1
         return (
           <div key={index} className="flex items-center justify-between gap-3 py-0.5">

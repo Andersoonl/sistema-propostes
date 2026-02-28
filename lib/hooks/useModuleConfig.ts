@@ -30,10 +30,13 @@ export function useModuleConfig() {
   const [overrides, setOverrides] = useState<Overrides>({})
   const [mounted, setMounted] = useState(false)
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    setOverrides(loadOverrides())
+    const loaded = loadOverrides()
+    setOverrides(loaded)
     setMounted(true)
   }, [])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const isEnabled = useCallback(
     (sectionId: string): boolean => {

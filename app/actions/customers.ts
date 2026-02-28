@@ -5,11 +5,12 @@ import { revalidatePath } from 'next/cache'
 import { customerSchema, type CustomerInput } from '@/lib/validators/entity'
 import { detectDocumentType, onlyDigits } from '@/lib/document'
 import type { PaginationParams, PaginatedResult, EntityCounts } from '@/app/cadastros/types'
+import type { Customer, Prisma } from '@/app/generated/prisma/client'
 
-export async function getCustomersPaginated(params: PaginationParams): Promise<PaginatedResult<any>> {
+export async function getCustomersPaginated(params: PaginationParams): Promise<PaginatedResult<Customer>> {
   const { page, pageSize, search, status, city, sortBy, sortOrder } = params
 
-  const where: any = {}
+  const where: Prisma.CustomerWhereInput = {}
 
   if (status && status !== 'ALL') {
     where.status = status
@@ -28,7 +29,7 @@ export async function getCustomersPaginated(params: PaginationParams): Promise<P
     ]
   }
 
-  let orderBy: any = { companyName: 'asc' }
+  let orderBy: Prisma.CustomerOrderByWithRelationInput | Prisma.CustomerOrderByWithRelationInput[] = { companyName: 'asc' }
   if (sortBy) {
     switch (sortBy) {
       case 'companyName':
@@ -172,7 +173,15 @@ export async function updateCustomer(id: string, data: CustomerInput) {
 }
 
 export async function deleteCustomer(id: string) {
-  await prisma.customer.delete({ where: { id } })
+  try {
+    await prisma.customer.delete({ where: { id } })
+  } catch (err: unknown) {
+    const prismaErr = err as { code?: string; message?: string }
+    if (prismaErr?.code === 'P2003' || prismaErr?.message?.includes('Foreign key constraint')) {
+      throw new Error('Este cliente possui orçamentos ou pedidos e não pode ser excluído.')
+    }
+    throw err
+  }
   revalidatePath('/cadastros/clientes')
 }
 

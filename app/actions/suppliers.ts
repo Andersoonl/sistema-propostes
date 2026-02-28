@@ -5,11 +5,12 @@ import { revalidatePath } from 'next/cache'
 import { supplierSchema, type SupplierInput } from '@/lib/validators/entity'
 import { detectDocumentType, onlyDigits } from '@/lib/document'
 import type { PaginationParams, PaginatedResult, EntityCounts } from '@/app/cadastros/types'
+import type { Supplier, Prisma } from '@/app/generated/prisma/client'
 
-export async function getSuppliersPaginated(params: PaginationParams): Promise<PaginatedResult<any>> {
+export async function getSuppliersPaginated(params: PaginationParams): Promise<PaginatedResult<Supplier>> {
   const { page, pageSize, search, status, city, sortBy, sortOrder } = params
 
-  const where: any = {}
+  const where: Prisma.SupplierWhereInput = {}
 
   if (status && status !== 'ALL') {
     where.status = status
@@ -28,7 +29,7 @@ export async function getSuppliersPaginated(params: PaginationParams): Promise<P
     ]
   }
 
-  let orderBy: any = { companyName: 'asc' }
+  let orderBy: Prisma.SupplierOrderByWithRelationInput | Prisma.SupplierOrderByWithRelationInput[] = { companyName: 'asc' }
   if (sortBy) {
     switch (sortBy) {
       case 'companyName':

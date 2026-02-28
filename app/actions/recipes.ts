@@ -56,9 +56,17 @@ export async function getProductsWithRecipes() {
 }
 
 export async function deleteProduct(id: string) {
-  await prisma.product.delete({
-    where: { id },
-  })
+  try {
+    await prisma.product.delete({
+      where: { id },
+    })
+  } catch (err: unknown) {
+    const prismaErr = err as { code?: string; message?: string }
+    if (prismaErr?.code === 'P2003' || prismaErr?.message?.includes('Foreign key constraint')) {
+      throw new Error('Este produto está em orçamentos ou pedidos e não pode ser excluído.')
+    }
+    throw err
+  }
 
   revalidatePath('/produtos')
   revalidatePath('/dia')

@@ -19,6 +19,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
     enabledByDefault: true,
     pages: [
       { href: '/dia', label: 'Lançamento Diário' },
+      { href: '/producao/ordens', label: 'Ordens de Produção' },
+      { href: '/paletizacao', label: 'Paletização' },
       { href: '/estoque', label: 'Estoque PA' },
       { href: '/materiais', label: 'Materiais' },
       { href: '/produtos', label: 'Produtos' },
@@ -40,7 +42,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
     id: 'comercial',
     label: 'Comercial',
     icon: '💼',
-    enabledByDefault: false,
+    enabledByDefault: true,
     pages: [
       { href: '/comercial/orcamentos', label: 'Orçamentos' },
       { href: '/comercial/pedidos', label: 'Pedidos' },
@@ -50,9 +52,11 @@ export const MODULE_SECTIONS: ModuleSection[] = [
     id: 'logistica',
     label: 'Logística',
     icon: '🚚',
-    enabledByDefault: false,
+    enabledByDefault: true,
     pages: [
       { href: '/logistica/entregas', label: 'Entregas' },
+      { href: '/logistica/veiculos', label: 'Veículos' },
+      { href: '/logistica/motoristas', label: 'Motoristas' },
     ],
   },
   {
@@ -84,6 +88,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
       { href: '/dash/producao', label: 'Produção' },
       { href: '/dash/cadeia', label: 'Cadeia Produtiva' },
       { href: '/dash/paradas', label: 'Paradas' },
+      { href: '/dash/comercial', label: 'Comercial' },
     ],
   },
 ]

@@ -57,7 +57,7 @@ export function MotivosClient({ machines }: MotivosClientProps) {
     setExpandedNV2(new Set())
     setEditingId(null)
     setAddingTo(null)
-  }, [selectedMachineId])
+  }, [selectedMachineId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleNV1 = (id: string) => {
     setExpandedNV1((prev) => {
@@ -139,7 +139,7 @@ export function MotivosClient({ machines }: MotivosClientProps) {
     setNewReasonName('')
   }
 
-  const selectedMachine = machines.find((m) => m.id === selectedMachineId)
+  // selectedMachineId is used directly, no need for the object
 
   return (
     <div>

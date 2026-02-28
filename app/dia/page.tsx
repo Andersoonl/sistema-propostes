@@ -1,4 +1,4 @@
-import { getMachines, getProducts, getProductionDays } from '@/app/actions/production'
+import { getMachines, getProducts } from '@/app/actions/production'
 import { DiaClient } from './DiaClient'
 
 export default async function DiaPage() {

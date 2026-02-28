@@ -9,6 +9,7 @@
     "lint": "eslint",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed-complete": "tsx prisma/seed-complete.ts",
     "db:reset": "prisma migrate reset",
     "db:studio": "prisma studio"
   },
@@ -21,6 +22,7 @@
     "@prisma/client": "^7.3.0",
     "dotenv": "^17.2.3",
     "next": "16.1.5",
+    "pdf-lib": "^1.17.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "recharts": "^3.7.0",
@@ -28,7 +30,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
+    "@tailwindcss/postcss": "^4.2.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
